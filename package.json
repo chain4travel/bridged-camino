@@ -1,0 +1,36 @@
+{
+    "name": "bridged-camino",
+    "description": "An ERC20-based token for bridged CAM on other chains",
+    "version": "1.0.0",
+    "scripts": {
+        "test": "REPORT_GAS=true yarn hardhat test",
+        "compile": "yarn hardhat compile",
+        "format": "yarn prettier --write .",
+        "docgen": "yarn hardhat docgen && yarn prettier --write docs/",
+        "lint:prettier": "yarn prettier --check ."
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+        "@nomicfoundation/hardhat-ethers": "^3.0.0",
+        "@nomicfoundation/hardhat-ignition": "^0.15.0",
+        "@nomicfoundation/hardhat-ignition-ethers": "^0.15.0",
+        "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+        "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+        "@nomicfoundation/hardhat-verify": "^2.0.0",
+        "@openzeppelin/contracts": "^5.2.0",
+        "@openzeppelin/contracts-upgradeable": "^5.2.0",
+        "@openzeppelin/hardhat-upgrades": "^3.9.0",
+        "@typechain/ethers-v6": "^0.5.0",
+        "@typechain/hardhat": "^9.0.0",
+        "chai": "^4.2.0",
+        "ethers": "^6.4.0",
+        "hardhat": "^2.22.18",
+        "hardhat-contract-sizer": "^2.10.0",
+        "hardhat-gas-reporter": "^1.0.8",
+        "prettier": "^3.4.2",
+        "prettier-plugin-solidity": "^1.4.2",
+        "solidity-coverage": "^0.8.0",
+        "solidity-docgen": "^0.6.0-beta.36",
+        "typechain": "^8.3.0"
+    }
+}

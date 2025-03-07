@@ -1,0 +1,10 @@
+{
+    "NOTE": "Example parameters for BridgedCaminoV1Module. Update this file with your own parameters. Preferably, with multisig addresses.",
+    "BridgedCaminoV1Module": {
+        "name": "BridgedCamino",
+        "symbol": "WCAM.c",
+        "defaultAdmin": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
+        "pauser": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
+        "upgrader": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21"
+    }
+}
