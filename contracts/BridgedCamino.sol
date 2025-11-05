@@ -62,7 +62,7 @@ contract BridgedCaminoV1 is
     /// @custom:storage-location erc7201:camino.network.BridgedCaminoV1
     struct BridgedCaminoV1Storage {
         // Minter allowances
-        mapping(address minter => uint256 allowance) minterAllowed;
+        mapping(address minter => uint256 allowance) minterAllowance;
     }
 
     // keccak256(abi.encode(uint256(keccak256("camino.network.BridgedCaminoV1")) - 1)) & ~bytes32(uint256(0xff));
@@ -166,13 +166,13 @@ contract BridgedCaminoV1 is
     function mint(address to, uint256 amount) external virtual whenNotPaused onlyRole(MINTER_ROLE) {
         BridgedCaminoV1Storage storage $ = _getBridgedCaminoV1Storage();
 
-        uint256 minterAllowedAmount = $.minterAllowed[msg.sender];
+        uint256 minterAllowanceAmount = $.minterAllowance[msg.sender];
 
-        if (minterAllowedAmount < amount) {
+        if (minterAllowanceAmount < amount) {
             revert AmountExceedsMintAllowance(msg.sender, amount);
         }
 
-        $.minterAllowed[msg.sender] = minterAllowedAmount - amount;
+        $.minterAllowance[msg.sender] = minterAllowanceAmount - amount;
 
         emit Mint(msg.sender, to, amount);
 
@@ -186,18 +186,18 @@ contract BridgedCaminoV1 is
      */
     function minterAllowance(address minter) external view virtual returns (uint256 amount) {
         BridgedCaminoV1Storage storage $ = _getBridgedCaminoV1Storage();
-        return $.minterAllowed[minter];
+        return $.minterAllowance[minter];
     }
 
     /**
-     * @notice Configure a `minter` with an initial allowance of `minterAllowedAmount`
+     * @notice Configure a `minter` with an initial allowance of `minterAllowanceAmount`
      * @dev Only `MINTER_ROLE_ADMIN` can call this function
      * @param minter The address of the minter
-     * @param minterAllowedAmount The initial allowance of the minter
+     * @param minterAllowanceAmount The initial allowance of the minter
      */
     function configureMinter(
         address minter,
-        uint256 minterAllowedAmount
+        uint256 minterAllowanceAmount
     ) external whenNotPaused onlyRole(MINTER_ROLE_ADMIN) {
         BridgedCaminoV1Storage storage $ = _getBridgedCaminoV1Storage();
 
@@ -205,13 +205,13 @@ contract BridgedCaminoV1 is
         bool granted = _grantRole(MINTER_ROLE, minter);
 
         // Set minter allowance
-        $.minterAllowed[minter] = minterAllowedAmount;
+        $.minterAllowance[minter] = minterAllowanceAmount;
 
         // Emit event
-        emit MinterConfigured(minter, minterAllowedAmount, granted);
+        emit MinterConfigured(minter, minterAllowanceAmount, granted);
     }
 
-    /**
+    /**""
      * @notice Revoke the minter role from `minter` and remove its allowance
      * @dev Only `MINTER_ROLE_ADMIN` can call this function
      * @param minter The address of the minter
@@ -223,7 +223,7 @@ contract BridgedCaminoV1 is
         _revokeRole(MINTER_ROLE, minter);
 
         // Remove minter allowance
-        $.minterAllowed[minter] = 0;
+        $.minterAllowance[minter] = 0;
 
         // Emit event
         emit MinterRemoved(minter);
