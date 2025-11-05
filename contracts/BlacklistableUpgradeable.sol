@@ -17,9 +17,9 @@ abstract contract BlacklistableUpgradeable is Initializable, AccessControlEnumer
         mapping(address => bool) blacklisted;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("camino.network.BridgedCamino.blacklistable")) - 1)) & ~bytes32(uint256(0xff));
+    // keccak256(abi.encode(uint256(keccak256("camino.network.BridgedCaminoV1.blacklistable")) - 1)) & ~bytes32(uint256(0xff));
     bytes32 private constant BlacklistableStorageLocation =
-        0x8ab61072870d396feb4c0fe4201edd42096db02ccbea2f0e07461744ef273100;
+        0x68774384eeaf242da1643f15db6daf1574e4e74409b3ab6ed48adc9617047100;
 
     function _getBlacklistableStorage() internal pure returns (BlacklistableStorage storage $) {
         assembly {
