@@ -215,6 +215,16 @@ contract BridgedCaminoV1 is
     }
 
     /**
+     * @notice Checks if an address is a minter
+     * @dev Returns true if the address has the MINTER_ROLE
+     * @param account The address to check
+     * @return True if the address is a minter, false otherwise
+     */
+    function isMinter(address account) external view virtual returns (bool) {
+        return hasRole(MINTER_ROLE, account);
+    }
+
+    /**
      * @notice Grants MINTER_ROLE to an address and sets/updates their minting allowance quota
      * @dev Used to onboard new bridges or adjust existing bridge quotas. Setting allowance to a lower
      *      value can be used to gradually phase out a bridge. Reverts if paused to prevent
