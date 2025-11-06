@@ -107,14 +107,31 @@ describe("MintController", function () {
             expect(await mintController.getMinterManager()).to.equal(await minterManager.getAddress());
         });
 
-        it("Should revert if minter manager is zero address", async function () {
+        it("Should allow deployment with zero address for atomic deployment pattern", async function () {
             const { owner } = await loadFixture(deployMintControllerFixture);
             const MintController = await ethers.getContractFactory("MintController");
 
-            await expect(MintController.deploy(ethers.ZeroAddress, owner.address)).to.be.revertedWithCustomError(
-                MintController,
-                "MinterManagerZeroAddress",
-            );
+            // Should be able to deploy with address(0)
+            const mintController = await MintController.deploy(ethers.ZeroAddress, owner.address);
+
+            // But getMinterManager should return address(0)
+            expect(await mintController.getMinterManager()).to.equal(ethers.ZeroAddress);
+        });
+
+        it("Should require setMinterManager before use when deployed with zero address", async function () {
+            const { owner, controller1 } = await loadFixture(deployMintControllerFixture);
+            const MintController = await ethers.getContractFactory("MintController");
+
+            // Deploy with address(0)
+            const mintController = await MintController.deploy(ethers.ZeroAddress, owner.address);
+
+            // Configure a controller
+            await mintController.connect(owner).configureController(controller1.address, controller1.address);
+
+            // Trying to call configureMinter should fail because minterManager is not set
+            await expect(
+                mintController.connect(controller1).configureMinter(1000)
+            ).to.be.reverted; // Will revert when trying to call address(0)
         });
     });
 

@@ -111,14 +111,18 @@ contract MintController is Controller {
 
     /**
      * @notice Initializes the MintController with a minter manager and owner
-     * @param minterManager_ The address of the minter manager contract
+     * @dev Can be deployed with address(0) for minterManager to support atomic deployment
+     *      where MasterMinter is deployed before the token. In this case, setMinterManager()
+     *      must be called before any controller functions can be used.
+     * @param minterManager_ The address of the minter manager contract (can be address(0))
      * @param owner The address of the owner
      */
     constructor(address minterManager_, address owner) Controller(owner) {
-        if (minterManager_ == address(0)) {
-            revert MinterManagerZeroAddress();
+        // Allow address(0) for deployment flexibility
+        // If deployed with address(0), setMinterManager() must be called before use
+        if (minterManager_ != address(0)) {
+            minterManager = IMinterManagement(minterManager_);
         }
-        minterManager = IMinterManagement(minterManager_);
     }
 
     /***************************************************
@@ -139,6 +143,9 @@ contract MintController is Controller {
 
     /**
      * @notice Sets the minter manager
+     * @dev This function serves two purposes:
+     *      1. Initial setup: If deployed with address(0), this sets the minter manager for the first time
+     *      2. Migration: Allows changing to a new token contract if needed
      * @param newMinterManager The address of the new minter manager contract
      */
     function setMinterManager(address newMinterManager) public onlyOwner {
