@@ -13,7 +13,13 @@ import { BlacklistableUpgradeable } from "./BlacklistableUpgradeable.sol";
 
 /**
  * @title BridgedCamino
- * @notice A pausable, upgradable and permit-enabled ERC20 token with minting and burning capabilities.
+ * @notice A bridged wrapped token for Camino network with controlled minting and emergency controls.
+ * @dev This contract implements a secure bridging pattern where:
+ *      - Minting is restricted to authorized bridges with individual allowance quotas to limit blast radius
+ *      - Burning is restricted to bridges to ensure proper cross-chain reconciliation
+ *      - Pausability provides emergency stop mechanism for security incidents
+ *      - Blacklisting enables regulatory compliance and recovery from compromised addresses
+ *      - UUPS upgradeability allows bug fixes while maintaining the same proxy address
  */
 contract BridgedCaminoV1 is
     Initializable,
@@ -25,34 +31,13 @@ contract BridgedCaminoV1 is
     BlacklistableUpgradeable,
     UUPSUpgradeable
 {
-    /**
-     * @dev PAUSER_ROLE is a role that allows a user to pause and unpause the contract
-     */
+    // Role separation ensures that different operational concerns can be managed independently
+    // with appropriate privilege levels, following principle of least privilege
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-
-    /**
-     * @dev PAUSER_ROLE_ADMIN is the role that can grant and revoke the PAUSER_ROLE
-     */
     bytes32 public constant PAUSER_ROLE_ADMIN = keccak256("PAUSER_ROLE_ADMIN");
-
-    /**
-     * @dev MINTER_ROLE is a role that allows a user to mint tokens
-     */
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-
-    /**
-     * @dev MINTER_ROLE_ADMIN is the role that can grant and revoke the MINTER_ROLE
-     */
     bytes32 public constant MINTER_ROLE_ADMIN = keccak256("MINTER_ROLE_ADMIN");
-
-    /**
-     * @dev UPGRADER_ROLE is a role that allows a user to upgrade the contract
-     */
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
-
-    /**
-     * @dev UPGRADER_ROLE_ADMIN is the role that can grant and revoke the UPGRADER_ROLE
-     */
     bytes32 public constant UPGRADER_ROLE_ADMIN = keccak256("UPGRADER_ROLE_ADMIN");
 
     /***************************************************
@@ -61,7 +46,8 @@ contract BridgedCaminoV1 is
 
     /// @custom:storage-location erc7201:camino.network.BridgedCaminoV1
     struct BridgedCaminoV1Storage {
-        // Minter allowances
+        // Each minter has an individual allowance to limit damage if a bridge is compromised
+        // This implements the same security pattern as USDC's FiatToken
         mapping(address minter => uint256 allowance) minterAllowance;
     }
 
@@ -194,8 +180,10 @@ contract BridgedCaminoV1 is
      ***************************************************/
 
     /**
-     * @notice Mint `amount` tokens to `to` using the minter's allowance
-     * @dev Only `MINTER_ROLE` can call this function
+     * @notice Mints tokens from the caller's minting allowance quota
+     * @dev Restricted to MINTER_ROLE (typically bridge contracts). The allowance system ensures
+     *      that if a single bridge is compromised, damage is limited to that bridge's quota.
+     *      Reverts if paused to prevent minting during security incidents.
      * @param to The address of the recipient
      * @param amount The amount of tokens to mint
      */
@@ -216,9 +204,10 @@ contract BridgedCaminoV1 is
     }
 
     /**
-     * @notice Get the mint allowance of the `minter`
+     * @notice Returns the remaining minting quota for a given minter
+     * @dev Use this to monitor bridge allowances and detect when they need to be increased
      * @param minter The address of the minter
-     * @return amount The allowance of the minter
+     * @return amount The remaining allowance of the minter
      */
     function minterAllowance(address minter) external view virtual returns (uint256 amount) {
         BridgedCaminoV1Storage storage $ = _getBridgedCaminoV1Storage();
@@ -226,10 +215,12 @@ contract BridgedCaminoV1 is
     }
 
     /**
-     * @notice Configure a `minter` with an initial allowance of `minterAllowanceAmount`
-     * @dev Only `MINTER_ROLE_ADMIN` can call this function
+     * @notice Grants MINTER_ROLE to an address and sets/updates their minting allowance quota
+     * @dev Used to onboard new bridges or adjust existing bridge quotas. Setting allowance to a lower
+     *      value can be used to gradually phase out a bridge. Reverts if paused to prevent
+     *      configuration changes during incident investigation.
      * @param minter The address of the minter
-     * @param minterAllowanceAmount The initial allowance of the minter
+     * @param minterAllowanceAmount The new total allowance for the minter (not incremental)
      */
     function configureMinter(
         address minter,
@@ -248,9 +239,10 @@ contract BridgedCaminoV1 is
     }
 
     /**
-     * @notice Revoke the minter role from `minter` and remove its allowance
-     * @dev Only `MINTER_ROLE_ADMIN` can call this function
-     * @param minter The address of the minter
+     * @notice Removes minting privileges from an address
+     * @dev Use this to decommission bridges or revoke access from compromised addresses.
+     *      Can be called even when paused to allow emergency response.
+     * @param minter The address of the minter to remove
      */
     function removeMinter(address minter) external virtual onlyRole(MINTER_ROLE_ADMIN) {
         BridgedCaminoV1Storage storage $ = _getBridgedCaminoV1Storage();
@@ -270,9 +262,11 @@ contract BridgedCaminoV1 is
      ***************************************************/
 
     /**
-     * @notice Burns `amount` tokens from the caller.
-     * @dev Only `MINTER_ROLE` can call this function
-     * @param amount The amount of tokens to burn.
+     * @notice Burns tokens from the caller's balance
+     * @dev Restricted to MINTER_ROLE to ensure only bridges burn tokens during unlock operations,
+     *      maintaining proper cross-chain accounting. Can be called when paused to allow
+     *      emergency supply reduction during security incidents (following USDC pattern).
+     * @param amount The amount of tokens to burn
      */
     function burn(uint256 amount) public virtual override onlyRole(MINTER_ROLE) {
         emit Burn(msg.sender, msg.sender, amount);
@@ -280,10 +274,11 @@ contract BridgedCaminoV1 is
     }
 
     /**
-     * @notice Burns `amount` tokens from `from`.
-     * @dev Only `MINTER_ROLE` can call this function
-     * @param from The address from which to burn tokens.
-     * @param amount The amount of tokens to burn.
+     * @notice Burns tokens from a specified address (requires prior approval)
+     * @dev Restricted to MINTER_ROLE for cross-chain accounting. Can be called when paused
+     *      to enable emergency response scenarios like burning tokens from compromised addresses.
+     * @param from The address from which to burn tokens
+     * @param amount The amount of tokens to burn
      */
     function burnFrom(address from, uint256 amount) public virtual override onlyRole(MINTER_ROLE) {
         emit Burn(msg.sender, from, amount);
@@ -295,16 +290,17 @@ contract BridgedCaminoV1 is
      ***************************************************/
 
     /**
-     * @notice Pauses the contract
-     * @dev Only `PAUSER_ROLE` can call this function
+     * @notice Activates emergency stop, preventing mints and transfers
+     * @dev Use this immediately upon detecting a security incident. Pausing stops new supply
+     *      creation and token movement while allowing burns for incident remediation.
      */
     function pause() public virtual onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
     /**
-     * @notice Unpauses the contract
-     * @dev Only `PAUSER_ROLE` can call this function
+     * @notice Deactivates emergency stop, resuming normal operations
+     * @dev Use this after security incident is resolved and contract state is verified as safe.
      */
     function unpause() public virtual onlyRole(PAUSER_ROLE) {
         _unpause();
@@ -315,9 +311,10 @@ contract BridgedCaminoV1 is
      ***************************************************/
 
     /**
-     * @notice Authorizes the upgrade
-     * @dev Only `UPGRADER_ROLE` can call this function
-     * @param newImplementation The address of the new implementation
+     * @notice Authorizes upgrading the contract implementation
+     * @dev UUPS upgrade authorization. Restricted to UPGRADER_ROLE to ensure only authorized
+     *      governance can deploy new logic while maintaining the same proxy address.
+     * @param newImplementation The address of the new implementation contract
      */
     function _authorizeUpgrade(address newImplementation) internal virtual override onlyRole(UPGRADER_ROLE) {}
 
@@ -326,12 +323,13 @@ contract BridgedCaminoV1 is
      ***************************************************/
 
     /**
-     * @notice Approves a spender to spend the specified value of tokens on behalf of the owner
-     * @dev This function checks that the owner, spender, and caller are not blacklisted
+     * @dev Overrides ERC20 approve to add blacklist checks
+     *      Checks msg.sender to prevent blacklisted users from granting approvals via permit or other mechanisms.
+     *      Checks owner and spender to prevent blacklisted addresses from participating in the approval system.
      * @param owner The address of the token owner
      * @param spender The address of the spender
      * @param value The amount of tokens to approve
-     * @param emitEvent A flag indicating whether to emit the Approval event
+     * @param emitEvent Whether to emit the Approval event
      */
     function _approve(
         address owner,
@@ -350,10 +348,11 @@ contract BridgedCaminoV1 is
     }
 
     /**
-     * @notice Updates the token balances of `from` and `to` after a transfer
-     * @dev This function checks that `from`, `to`, and the caller are not blacklisted
-     * @param from The address of the sender
-     * @param to The address of the recipient
+     * @dev Overrides ERC20 update to add blacklist and pause checks
+     *      Checks msg.sender in addition to from/to to prevent blacklisted addresses from
+     *      moving tokens via third-party mechanisms like transferFrom or contract interactions.
+     * @param from The address of the sender (address(0) for minting)
+     * @param to The address of the recipient (address(0) for burning)
      * @param value The amount of tokens to transfer
      */
     function _update(
