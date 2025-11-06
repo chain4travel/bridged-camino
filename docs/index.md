@@ -2,6 +2,12 @@
 
 ## BlacklistableUpgradeable
 
+Provides blacklist functionality for token contracts
+
+_Implements address blacklisting to enable regulatory compliance and incident response.
+Use cases include freezing stolen funds, complying with legal requirements, or
+preventing compromised addresses from interacting with the token._
+
 ### BLACKLISTER_ROLE
 
 ```solidity
@@ -70,11 +76,32 @@ function isBlacklisted(address _account) external view returns (bool)
 function blacklist(address _account) external
 ```
 
+Adds an address to the blacklist
+
+_Use this for regulatory compliance, freezing stolen funds, or blocking compromised addresses.
+Blacklisted addresses cannot transfer, receive, or approve tokens._
+
+#### Parameters
+
+| Name      | Type    | Description              |
+| --------- | ------- | ------------------------ |
+| \_account | address | The address to blacklist |
+
 ### unBlacklist
 
 ```solidity
 function unBlacklist(address _account) external
 ```
+
+Removes an address from the blacklist
+
+_Use this to restore access after legal resolution or when address is no longer a threat._
+
+#### Parameters
+
+| Name      | Type    | Description                          |
+| --------- | ------- | ------------------------------------ |
+| \_account | address | The address to remove from blacklist |
 
 ### \_isBlacklisted
 
@@ -96,7 +123,9 @@ function _unBlacklist(address _account) internal virtual
 
 ## BridgedCaminoV1
 
-A pausable, upgradable and permit-enabled ERC20 token with minting and burning capabilities.
+A bridged wrapped token for Camino network with controlled minting and emergency controls.
+
+_This contract implements a secure bridging pattern where: - Minting is restricted to authorized bridges with individual allowance quotas to limit blast radius - Burning is restricted to bridges to ensure proper cross-chain reconciliation - Pausability provides emergency stop mechanism for security incidents - Blacklisting enables regulatory compliance and recovery from compromised addresses - UUPS upgradeability allows bug fixes while maintaining the same proxy address_
 
 ### PAUSER_ROLE
 
@@ -104,15 +133,11 @@ A pausable, upgradable and permit-enabled ERC20 token with minting and burning c
 bytes32 PAUSER_ROLE
 ```
 
-_PAUSER_ROLE is a role that allows a user to pause and unpause the contract_
-
 ### PAUSER_ROLE_ADMIN
 
 ```solidity
 bytes32 PAUSER_ROLE_ADMIN
 ```
-
-_PAUSER_ROLE_ADMIN is the role that can grant and revoke the PAUSER_ROLE_
 
 ### MINTER_ROLE
 
@@ -120,15 +145,11 @@ _PAUSER_ROLE_ADMIN is the role that can grant and revoke the PAUSER_ROLE_
 bytes32 MINTER_ROLE
 ```
 
-_MINTER_ROLE is a role that allows a user to mint tokens_
-
 ### MINTER_ROLE_ADMIN
 
 ```solidity
 bytes32 MINTER_ROLE_ADMIN
 ```
-
-_MINTER_ROLE_ADMIN is the role that can grant and revoke the MINTER_ROLE_
 
 ### UPGRADER_ROLE
 
@@ -136,21 +157,17 @@ _MINTER_ROLE_ADMIN is the role that can grant and revoke the MINTER_ROLE_
 bytes32 UPGRADER_ROLE
 ```
 
-_UPGRADER_ROLE is a role that allows a user to upgrade the contract_
-
 ### UPGRADER_ROLE_ADMIN
 
 ```solidity
 bytes32 UPGRADER_ROLE_ADMIN
 ```
 
-_UPGRADER_ROLE_ADMIN is the role that can grant and revoke the UPGRADER_ROLE_
-
 ### BridgedCaminoV1Storage
 
 ```solidity
 struct BridgedCaminoV1Storage {
-    mapping(address => uint256) minterAllowed;
+    mapping(address => uint256) minterAllowance;
 }
 ```
 
@@ -237,6 +254,30 @@ Thrown when the mint amount exceeds the minter's allowance
 | \_minter | address | The address of the minter    |
 | \_amount | uint256 | The amount attempted to mint |
 
+### InitParams
+
+Initialization parameters for BridgedCamino
+
+#### Parameters
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+
+```solidity
+struct InitParams {
+    string name;
+    string symbol;
+    address defaultAdmin;
+    address pauser;
+    address upgrader;
+    address blacklister;
+    address pauserRoleAdmin;
+    address upgraderRoleAdmin;
+    address minterRoleAdmin;
+    address blacklisterRoleAdmin;
+}
+```
+
 ### constructor
 
 ```solidity
@@ -246,8 +287,16 @@ constructor() public
 ### initialize
 
 ```solidity
-function initialize(string _name, string _symbol, address defaultAdmin, address pauser, address upgrader) public
+function initialize(struct BridgedCaminoV1.InitParams params) public
 ```
+
+Initializes the BridgedCamino token with all roles and admins
+
+#### Parameters
+
+| Name   | Type                              | Description                                     |
+| ------ | --------------------------------- | ----------------------------------------------- |
+| params | struct BridgedCaminoV1.InitParams | Struct containing all initialization parameters |
 
 ### mint
 
@@ -255,9 +304,11 @@ function initialize(string _name, string _symbol, address defaultAdmin, address 
 function mint(address to, uint256 amount) external virtual
 ```
 
-Mint `amount` tokens to `to` using the minter's allowance
+Mints tokens from the caller's minting allowance quota
 
-_Only `MINTER_ROLE` can call this function_
+_Restricted to MINTER_ROLE (typically bridge contracts). The allowance system ensures
+that if a single bridge is compromised, damage is limited to that bridge's quota.
+Reverts if paused to prevent minting during security incidents._
 
 #### Parameters
 
@@ -272,7 +323,9 @@ _Only `MINTER_ROLE` can call this function_
 function minterAllowance(address minter) external view virtual returns (uint256 amount)
 ```
 
-Get the mint allowance of the `minter`
+Returns the remaining minting quota for a given minter
+
+_Use this to monitor bridge allowances and detect when they need to be increased_
 
 #### Parameters
 
@@ -282,26 +335,28 @@ Get the mint allowance of the `minter`
 
 #### Return Values
 
-| Name   | Type    | Description                 |
-| ------ | ------- | --------------------------- |
-| amount | uint256 | The allowance of the minter |
+| Name   | Type    | Description                           |
+| ------ | ------- | ------------------------------------- |
+| amount | uint256 | The remaining allowance of the minter |
 
 ### configureMinter
 
 ```solidity
-function configureMinter(address minter, uint256 minterAllowedAmount) external
+function configureMinter(address minter, uint256 minterAllowanceAmount) external
 ```
 
-Configure a `minter` with an initial allowance of `minterAllowedAmount`
+Grants MINTER_ROLE to an address and sets/updates their minting allowance quota
 
-_Only `MINTER_ROLE_ADMIN` can call this function_
+_Used to onboard new bridges or adjust existing bridge quotas. Setting allowance to a lower
+value can be used to gradually phase out a bridge. Reverts if paused to prevent
+configuration changes during incident investigation._
 
 #### Parameters
 
-| Name                | Type    | Description                         |
-| ------------------- | ------- | ----------------------------------- |
-| minter              | address | The address of the minter           |
-| minterAllowedAmount | uint256 | The initial allowance of the minter |
+| Name                  | Type    | Description                                              |
+| --------------------- | ------- | -------------------------------------------------------- |
+| minter                | address | The address of the minter                                |
+| minterAllowanceAmount | uint256 | The new total allowance for the minter (not incremental) |
 
 ### removeMinter
 
@@ -309,15 +364,16 @@ _Only `MINTER_ROLE_ADMIN` can call this function_
 function removeMinter(address minter) external virtual
 ```
 
-Revoke the minter role from `minter` and remove its allowance
+Removes minting privileges from an address
 
-_Only `MINTER_ROLE_ADMIN` can call this function_
+_Use this to decommission bridges or revoke access from compromised addresses.
+Can be called even when paused to allow emergency response._
 
 #### Parameters
 
-| Name   | Type    | Description               |
-| ------ | ------- | ------------------------- |
-| minter | address | The address of the minter |
+| Name   | Type    | Description                         |
+| ------ | ------- | ----------------------------------- |
+| minter | address | The address of the minter to remove |
 
 ### burn
 
@@ -325,15 +381,17 @@ _Only `MINTER_ROLE_ADMIN` can call this function_
 function burn(uint256 amount) public virtual
 ```
 
-Burns `amount` tokens from the caller.
+Burns tokens from the caller's balance
 
-_Only `MINTER_ROLE` can call this function_
+_Restricted to MINTER_ROLE to ensure only bridges burn tokens during unlock operations,
+maintaining proper cross-chain accounting. Can be called when paused to allow
+emergency supply reduction during security incidents (following USDC pattern)._
 
 #### Parameters
 
-| Name   | Type    | Description                   |
-| ------ | ------- | ----------------------------- |
-| amount | uint256 | The amount of tokens to burn. |
+| Name   | Type    | Description                  |
+| ------ | ------- | ---------------------------- |
+| amount | uint256 | The amount of tokens to burn |
 
 ### burnFrom
 
@@ -341,16 +399,17 @@ _Only `MINTER_ROLE` can call this function_
 function burnFrom(address from, uint256 amount) public virtual
 ```
 
-Burns `amount` tokens from `from`.
+Burns tokens from a specified address (requires prior approval)
 
-_Only `MINTER_ROLE` can call this function_
+_Restricted to MINTER_ROLE for cross-chain accounting. Can be called when paused
+to enable emergency response scenarios like burning tokens from compromised addresses._
 
 #### Parameters
 
-| Name   | Type    | Description                            |
-| ------ | ------- | -------------------------------------- |
-| from   | address | The address from which to burn tokens. |
-| amount | uint256 | The amount of tokens to burn.          |
+| Name   | Type    | Description                           |
+| ------ | ------- | ------------------------------------- |
+| from   | address | The address from which to burn tokens |
+| amount | uint256 | The amount of tokens to burn          |
 
 ### pause
 
@@ -358,9 +417,10 @@ _Only `MINTER_ROLE` can call this function_
 function pause() public virtual
 ```
 
-Pauses the contract
+Activates emergency stop, preventing mints and transfers
 
-_Only `PAUSER_ROLE` can call this function_
+_Use this immediately upon detecting a security incident. Pausing stops new supply
+creation and token movement while allowing burns for incident remediation._
 
 ### unpause
 
@@ -368,9 +428,9 @@ _Only `PAUSER_ROLE` can call this function_
 function unpause() public virtual
 ```
 
-Unpauses the contract
+Deactivates emergency stop, resuming normal operations
 
-_Only `PAUSER_ROLE` can call this function_
+_Use this after security incident is resolved and contract state is verified as safe._
 
 ### \_authorizeUpgrade
 
@@ -378,15 +438,16 @@ _Only `PAUSER_ROLE` can call this function_
 function _authorizeUpgrade(address newImplementation) internal virtual
 ```
 
-Authorizes the upgrade
+Authorizes upgrading the contract implementation
 
-_Only `UPGRADER_ROLE` can call this function_
+_UUPS upgrade authorization. Restricted to UPGRADER_ROLE to ensure only authorized
+governance can deploy new logic while maintaining the same proxy address._
 
 #### Parameters
 
-| Name              | Type    | Description                           |
-| ----------------- | ------- | ------------------------------------- |
-| newImplementation | address | The address of the new implementation |
+| Name              | Type    | Description                                    |
+| ----------------- | ------- | ---------------------------------------------- |
+| newImplementation | address | The address of the new implementation contract |
 
 ### \_approve
 
@@ -394,18 +455,18 @@ _Only `UPGRADER_ROLE` can call this function_
 function _approve(address owner, address spender, uint256 value, bool emitEvent) internal virtual
 ```
 
-Approves a spender to spend the specified value of tokens on behalf of the owner
-
-_This function checks that the owner, spender, and caller are not blacklisted_
+_Overrides ERC20 approve to add blacklist checks
+Checks msg.sender to prevent blacklisted users from granting approvals via permit or other mechanisms.
+Checks owner and spender to prevent blacklisted addresses from participating in the approval system._
 
 #### Parameters
 
-| Name      | Type    | Description                                          |
-| --------- | ------- | ---------------------------------------------------- |
-| owner     | address | The address of the token owner                       |
-| spender   | address | The address of the spender                           |
-| value     | uint256 | The amount of tokens to approve                      |
-| emitEvent | bool    | A flag indicating whether to emit the Approval event |
+| Name      | Type    | Description                        |
+| --------- | ------- | ---------------------------------- |
+| owner     | address | The address of the token owner     |
+| spender   | address | The address of the spender         |
+| value     | uint256 | The amount of tokens to approve    |
+| emitEvent | bool    | Whether to emit the Approval event |
 
 ### \_update
 
@@ -413,17 +474,17 @@ _This function checks that the owner, spender, and caller are not blacklisted_
 function _update(address from, address to, uint256 value) internal virtual
 ```
 
-Updates the token balances of `from` and `to` after a transfer
-
-_This function checks that `from`, `to`, and the caller are not blacklisted_
+_Overrides ERC20 update to add blacklist and pause checks
+Checks msg.sender in addition to from/to to prevent blacklisted addresses from
+moving tokens via third-party mechanisms like transferFrom or contract interactions._
 
 #### Parameters
 
-| Name  | Type    | Description                      |
-| ----- | ------- | -------------------------------- |
-| from  | address | The address of the sender        |
-| to    | address | The address of the recipient     |
-| value | uint256 | The amount of tokens to transfer |
+| Name  | Type    | Description                                           |
+| ----- | ------- | ----------------------------------------------------- |
+| from  | address | The address of the sender (address(0) for minting)    |
+| to    | address | The address of the recipient (address(0) for burning) |
+| value | uint256 | The amount of tokens to transfer                      |
 
 ## BridgedCaminoUpgradeTest
 
