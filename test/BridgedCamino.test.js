@@ -546,7 +546,7 @@ describe("BridgedCaminoV1", function () {
                 .withArgs(deployer.address, await proxiedBridgedCaminoV1.MINTER_ROLE());
         });
 
-        it("Should revert burn when paused", async function () {
+        it("Should allow burn when paused for emergency response", async function () {
             const { proxiedBridgedCaminoV1, pauser, minter, minterAllowanceAmount } = await loadFixture(
                 bridgedCaminoV1WithMintersFixture,
             );
@@ -558,11 +558,12 @@ describe("BridgedCaminoV1", function () {
             // Pause the contract
             expect(await proxiedBridgedCaminoV1.connect(pauser).pause()).to.not.reverted;
 
-            // Try to burn
-            await expect(proxiedBridgedCaminoV1.connect(minter).burn(1n)).to.be.revertedWithCustomError(
-                proxiedBridgedCaminoV1,
-                "EnforcedPause",
-            );
+            // Burn should succeed even when paused (emergency response pattern)
+            const burnTx = await proxiedBridgedCaminoV1.connect(minter).burn(1n);
+            await expect(burnTx)
+                .to.emit(proxiedBridgedCaminoV1, "Transfer")
+                .withArgs(minter.address, ethers.ZeroAddress, 1n);
+            await expect(burnTx).to.emit(proxiedBridgedCaminoV1, "Burn").withArgs(minter.address, minter.address, 1n);
         });
 
         it("Should burnFrom correctly", async function () {
@@ -616,7 +617,7 @@ describe("BridgedCaminoV1", function () {
                 .withArgs(otherAccount1.address, await proxiedBridgedCaminoV1.MINTER_ROLE());
         });
 
-        it("Should revert burnFrom when paused", async function () {
+        it("Should allow burnFrom when paused for emergency response", async function () {
             const { proxiedBridgedCaminoV1, pauser, minter, minterAllowanceAmount, otherAccount1 } = await loadFixture(
                 bridgedCaminoV1WithMintersFixture,
             );
@@ -635,10 +636,14 @@ describe("BridgedCaminoV1", function () {
             // Pause the contract
             await expect(proxiedBridgedCaminoV1.connect(pauser).pause()).to.not.reverted;
 
-            // Try to burnFrom, should fail
-            await expect(
-                proxiedBridgedCaminoV1.connect(minter).burnFrom(otherAccount1.address, mintAmount),
-            ).to.be.revertedWithCustomError(proxiedBridgedCaminoV1, "EnforcedPause");
+            // BurnFrom should succeed even when paused (emergency response pattern)
+            const burnFromTx = await proxiedBridgedCaminoV1.connect(minter).burnFrom(otherAccount1.address, mintAmount);
+            await expect(burnFromTx)
+                .to.emit(proxiedBridgedCaminoV1, "Transfer")
+                .withArgs(otherAccount1.address, ethers.ZeroAddress, mintAmount);
+            await expect(burnFromTx)
+                .to.emit(proxiedBridgedCaminoV1, "Burn")
+                .withArgs(minter.address, otherAccount1.address, mintAmount);
         });
     });
 

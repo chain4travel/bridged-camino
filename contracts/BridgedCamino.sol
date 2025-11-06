@@ -351,6 +351,7 @@ contract BridgedCaminoV1 is
      * @dev Overrides ERC20 update to add blacklist and pause checks
      *      Checks msg.sender in addition to from/to to prevent blacklisted addresses from
      *      moving tokens via third-party mechanisms like transferFrom or contract interactions.
+     *      Allows burning even when paused (to == address(0)) to enable emergency supply reduction.
      * @param from The address of the sender (address(0) for minting)
      * @param to The address of the recipient (address(0) for burning)
      * @param value The amount of tokens to transfer
@@ -367,6 +368,14 @@ contract BridgedCaminoV1 is
         notBlacklisted(to)
         notBlacklisted(msg.sender)
     {
-        super._update(from, to, value);
+        // Allow burning even when paused for emergency supply reduction
+        // For all other operations (mint, transfer), enforce pause check
+        if (to != address(0)) {
+            _requireNotPaused();
+        }
+
+        // Call ERC20Upgradeable._update directly to bypass ERC20PausableUpgradeable's pause check
+        // since we're handling pause logic manually above
+        ERC20Upgradeable._update(from, to, value);
     }
 }
