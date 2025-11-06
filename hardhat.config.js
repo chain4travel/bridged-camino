@@ -65,4 +65,16 @@ module.exports = {
         path: "./docs",
         pages: "single",
     },
+    gasReporter: {
+        currency: (process.env.CURRENCY) ? process.env.CURRENCY : "USDC",
+        currencyDisplayPrecision: 5,
+        coinmarketcap: process.env.CMC_API_KEY,
+        etherscan: process.env.ETHERSCAN_API_KEY,
+        reportFormat: "markdown",
+        outputFile: (process.env.REPORT_FILE) ? process.env.REPORT_FILE : "gasReport.md",
+        forceTerminalOutput: true,
+        forceTerminalOutputFormat: "terminal",
+        L1: (process.env.L1) ? process.env.L1 : "ethereum",
+        darkMode: false,
+    }
 };

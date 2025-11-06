@@ -5,6 +5,11 @@
         "symbol": "WCAM.c",
         "defaultAdmin": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
         "pauser": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
-        "upgrader": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21"
+        "upgrader": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
+        "blacklister": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
+        "pauserRoleAdmin": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
+        "upgraderRoleAdmin": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
+        "minterRoleAdmin": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
+        "blacklisterRoleAdmin": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21"
     }
 }
