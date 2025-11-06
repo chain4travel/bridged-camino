@@ -134,7 +134,12 @@ contract BridgedCaminoV1 is
         string memory _symbol,
         address defaultAdmin,
         address pauser,
-        address upgrader
+        address upgrader,
+        address blacklister,
+        address pauserRoleAdmin,
+        address upgraderRoleAdmin,
+        address minterRoleAdmin,
+        address blacklisterRoleAdmin
     ) public initializer {
         __ERC20_init(_name, _symbol);
         __ERC20Burnable_init();
@@ -144,10 +149,19 @@ contract BridgedCaminoV1 is
         __UUPSUpgradeable_init();
         __Blacklistable_init();
 
+        // Grant roles
         _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
         _grantRole(PAUSER_ROLE, pauser);
         _grantRole(UPGRADER_ROLE, upgrader);
+        _grantRole(BLACKLISTER_ROLE, blacklister);
 
+        // Grant admin roles
+        _grantRole(PAUSER_ROLE_ADMIN, pauserRoleAdmin);
+        _grantRole(UPGRADER_ROLE_ADMIN, upgraderRoleAdmin);
+        _grantRole(MINTER_ROLE_ADMIN, minterRoleAdmin);
+        _grantRole(BLACKLISTER_ROLE_ADMIN, blacklisterRoleAdmin);
+
+        // Set admins
         _setRoleAdmin(PAUSER_ROLE, PAUSER_ROLE_ADMIN);
         _setRoleAdmin(MINTER_ROLE, MINTER_ROLE_ADMIN);
         _setRoleAdmin(UPGRADER_ROLE, UPGRADER_ROLE_ADMIN);
