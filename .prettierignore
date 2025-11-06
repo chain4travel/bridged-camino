@@ -13,3 +13,5 @@ yarn.lock
 
 # Ignore abi
 /abi
+
+hardhat.config.js
