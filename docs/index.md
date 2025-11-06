@@ -476,7 +476,8 @@ function _update(address from, address to, uint256 value) internal virtual
 
 _Overrides ERC20 update to add blacklist and pause checks
 Checks msg.sender in addition to from/to to prevent blacklisted addresses from
-moving tokens via third-party mechanisms like transferFrom or contract interactions._
+moving tokens via third-party mechanisms like transferFrom or contract interactions.
+Allows burning even when paused (to == address(0)) to enable emergency supply reduction._
 
 #### Parameters
 
