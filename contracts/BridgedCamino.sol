@@ -252,7 +252,7 @@ contract BridgedCaminoV1 is
      * @dev Only `MINTER_ROLE` can call this function
      * @param amount The amount of tokens to burn.
      */
-    function burn(uint256 amount) public virtual override whenNotPaused onlyRole(MINTER_ROLE) {
+    function burn(uint256 amount) public virtual override onlyRole(MINTER_ROLE) {
         emit Burn(msg.sender, msg.sender, amount);
         super.burn(amount);
     }
@@ -263,7 +263,7 @@ contract BridgedCaminoV1 is
      * @param from The address from which to burn tokens.
      * @param amount The amount of tokens to burn.
      */
-    function burnFrom(address from, uint256 amount) public virtual override whenNotPaused onlyRole(MINTER_ROLE) {
+    function burnFrom(address from, uint256 amount) public virtual override onlyRole(MINTER_ROLE) {
         emit Burn(msg.sender, from, amount);
         super.burnFrom(from, amount);
     }
