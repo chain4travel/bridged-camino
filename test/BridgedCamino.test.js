@@ -114,49 +114,6 @@ describe("BridgedCaminoV1", function () {
         };
     }
 
-    async function _b_ridgedCaminoV1WithBlacklistFixture() {
-        const {
-            proxiedBridgedCaminoV1,
-            deployer,
-            defaultAdmin,
-            pauserAdmin,
-            pauser,
-            upgraderAdmin,
-            upgrader,
-            minterAdmin,
-            minter,
-            blacklisterAdmin,
-            blacklister,
-            minterAllowanceAmount,
-            otherAccount1,
-            otherAccount2,
-        } = await loadFixture(bridgedCaminoV1WithMintersFixture);
-
-        await proxiedBridgedCaminoV1
-            .connect(defaultAdmin)
-            .grantRole(await proxiedBridgedCaminoV1.BLACKLISTER_ROLE_ADMIN(), blacklisterAdmin.address);
-        await proxiedBridgedCaminoV1
-            .connect(blacklisterAdmin)
-            .grantRole(await proxiedBridgedCaminoV1.BLACKLISTER_ROLE(), blacklister.address);
-
-        return {
-            proxiedBridgedCaminoV1,
-            deployer,
-            defaultAdmin,
-            pauserAdmin,
-            pauser,
-            upgraderAdmin,
-            upgrader,
-            minterAdmin,
-            minter,
-            blacklisterAdmin,
-            blacklister,
-            minterAllowanceAmount,
-            otherAccount1,
-            otherAccount2,
-        };
-    }
-
     // Helper to get the current chainId.
     async function getChainId() {
         return (await ethers.provider.getNetwork()).chainId;
