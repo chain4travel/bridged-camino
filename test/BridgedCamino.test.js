@@ -27,19 +27,22 @@ describe("BridgedCaminoV1", function () {
         const name = "BridgedCamino";
         const symbol = "WCAM.c";
 
+        // Create initialization parameters struct
+        const initParams = {
+            name: name,
+            symbol: symbol,
+            defaultAdmin: defaultAdmin.address,
+            pauser: pauser.address,
+            upgrader: upgrader.address,
+            blacklister: blacklister.address,
+            pauserRoleAdmin: pauserAdmin.address,
+            upgraderRoleAdmin: upgraderAdmin.address,
+            minterRoleAdmin: minterAdmin.address,
+            blacklisterRoleAdmin: blacklisterAdmin.address,
+        };
+
         // Encode the initialization data
-        const initializeData = bridgedCaminoV1Impl.interface.encodeFunctionData("initialize", [
-            name,
-            symbol,
-            defaultAdmin.address,
-            pauser.address,
-            upgrader.address,
-            blacklister.address,
-            pauserAdmin.address,
-            upgraderAdmin.address,
-            minterAdmin.address,
-            blacklisterAdmin.address,
-        ]);
+        const initializeData = bridgedCaminoV1Impl.interface.encodeFunctionData("initialize", [initParams]);
 
         // Get the ERC1967ProxyFactory
         const ERC1967ProxyFactory = await ethers.getContractFactory("ERC1967Proxy");
@@ -236,20 +239,23 @@ describe("BridgedCaminoV1", function () {
             const { proxiedBridgedCaminoV1, defaultAdmin, pauser, upgrader, blacklister, name, symbol } =
                 await loadFixture(deployBridgedCaminoV1Fixture);
 
-            await expect(
-                proxiedBridgedCaminoV1.initialize(
-                    name,
-                    symbol,
-                    defaultAdmin.address,
-                    pauser.address,
-                    upgrader.address,
-                    blacklister.address,
-                    defaultAdmin.address,
-                    defaultAdmin.address,
-                    defaultAdmin.address,
-                    defaultAdmin.address,
-                ),
-            ).to.be.revertedWithCustomError(proxiedBridgedCaminoV1, "InvalidInitialization");
+            const initParams = {
+                name: name,
+                symbol: symbol,
+                defaultAdmin: defaultAdmin.address,
+                pauser: pauser.address,
+                upgrader: upgrader.address,
+                blacklister: blacklister.address,
+                pauserRoleAdmin: defaultAdmin.address,
+                upgraderRoleAdmin: defaultAdmin.address,
+                minterRoleAdmin: defaultAdmin.address,
+                blacklisterRoleAdmin: defaultAdmin.address,
+            };
+
+            await expect(proxiedBridgedCaminoV1.initialize(initParams)).to.be.revertedWithCustomError(
+                proxiedBridgedCaminoV1,
+                "InvalidInitialization",
+            );
         });
 
         it("Check eip712Domain", async function () {

@@ -124,47 +124,69 @@ contract BridgedCaminoV1 is
      *                     INIT                        *
      ***************************************************/
 
+    /**
+     * @notice Initialization parameters for BridgedCamino
+     * @param name Token name (e.g., "Bridged Camino")
+     * @param symbol Token symbol (e.g., "bCAM")
+     * @param defaultAdmin Address that receives DEFAULT_ADMIN_ROLE (controls all role admins)
+     * @param pauser Address that receives PAUSER_ROLE (can pause/unpause)
+     * @param upgrader Address that receives UPGRADER_ROLE (can upgrade contract)
+     * @param blacklister Address that receives BLACKLISTER_ROLE (can blacklist addresses)
+     * @param pauserRoleAdmin Address that receives PAUSER_ROLE_ADMIN (manages pausers)
+     * @param upgraderRoleAdmin Address that receives UPGRADER_ROLE_ADMIN (manages upgraders)
+     * @param minterRoleAdmin Address that receives MINTER_ROLE_ADMIN (manages minters)
+     * @param blacklisterRoleAdmin Address that receives BLACKLISTER_ROLE_ADMIN (manages blacklisters)
+     */
+    struct InitParams {
+        string name;
+        string symbol;
+        address defaultAdmin;
+        address pauser;
+        address upgrader;
+        address blacklister;
+        address pauserRoleAdmin;
+        address upgraderRoleAdmin;
+        address minterRoleAdmin;
+        address blacklisterRoleAdmin;
+    }
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(
-        string memory _name,
-        string memory _symbol,
-        address defaultAdmin,
-        address pauser,
-        address upgrader,
-        address blacklister,
-        address pauserRoleAdmin,
-        address upgraderRoleAdmin,
-        address minterRoleAdmin,
-        address blacklisterRoleAdmin
-    ) public initializer {
-        __ERC20_init(_name, _symbol);
+    /**
+     * @notice Initializes the BridgedCamino token with all roles and admins
+     * @param params Struct containing all initialization parameters
+     */
+    function initialize(InitParams calldata params) public initializer {
+        __ERC20_init(params.name, params.symbol);
         __ERC20Burnable_init();
         __ERC20Pausable_init();
         __AccessControl_init();
-        __ERC20Permit_init(_name);
+        __ERC20Permit_init(params.name);
         __UUPSUpgradeable_init();
         __Blacklistable_init();
 
         // Grant roles
-        _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
-        _grantRole(PAUSER_ROLE, pauser);
-        _grantRole(UPGRADER_ROLE, upgrader);
-        _grantRole(BLACKLISTER_ROLE, blacklister);
+        _grantRole(DEFAULT_ADMIN_ROLE, params.defaultAdmin);
+        _grantRole(PAUSER_ROLE, params.pauser);
+        _grantRole(UPGRADER_ROLE, params.upgrader);
+        _grantRole(BLACKLISTER_ROLE, params.blacklister);
 
         // Grant admin roles
-        _grantRole(PAUSER_ROLE_ADMIN, pauserRoleAdmin);
-        _grantRole(UPGRADER_ROLE_ADMIN, upgraderRoleAdmin);
-        _grantRole(MINTER_ROLE_ADMIN, minterRoleAdmin);
-        _grantRole(BLACKLISTER_ROLE_ADMIN, blacklisterRoleAdmin);
+        _grantRole(PAUSER_ROLE_ADMIN, params.pauserRoleAdmin);
+        _grantRole(UPGRADER_ROLE_ADMIN, params.upgraderRoleAdmin);
+        _grantRole(MINTER_ROLE_ADMIN, params.minterRoleAdmin);
+        _grantRole(BLACKLISTER_ROLE_ADMIN, params.blacklisterRoleAdmin);
 
-        // Set admins
+        // Set role admins
         _setRoleAdmin(PAUSER_ROLE, PAUSER_ROLE_ADMIN);
         _setRoleAdmin(MINTER_ROLE, MINTER_ROLE_ADMIN);
         _setRoleAdmin(UPGRADER_ROLE, UPGRADER_ROLE_ADMIN);
+        // This is already set in __Blacklistable_init(), but we set it here
+        // explicitly for consistency
+        _setRoleAdmin(BLACKLISTER_ROLE, BLACKLISTER_ROLE_ADMIN);
     }
 
     /***************************************************
