@@ -225,7 +225,7 @@ contract BridgedCaminoV1 is
         emit MinterConfigured(minter, minterAllowanceAmount, granted);
     }
 
-    /**""
+    /**
      * @notice Revoke the minter role from `minter` and remove its allowance
      * @dev Only `MINTER_ROLE_ADMIN` can call this function
      * @param minter The address of the minter
