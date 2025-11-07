@@ -43,7 +43,7 @@ The system uses a three-tier hierarchy for minting control:
 
 ```
 ┌──────────────────────────────┐
-│  Owner Address               │  (masterMinterOwner, recommend multisig)
+│  Owner Address               │  (masterMinterOwner)
 │  - Manages controllers       │
 │  - Can remove controllers    │
 └──────────┬───────────────────┘
@@ -82,8 +82,6 @@ The system uses a three-tier hierarchy for minting control:
 | `PAUSER_ROLE`        | Pauser address            | Can pause/unpause the token                  |
 | `UPGRADER_ROLE`      | Upgrader address          | Can upgrade the implementation               |
 | `BLACKLISTER_ROLE`   | Blacklister address       | Can blacklist/unblacklist addresses          |
-
-**Note:** Using multisig wallets for role holders is strongly recommended for production security.
 
 ### MasterMinter Workflow
 
@@ -137,23 +135,23 @@ This three-tier system provides:
 
 ### 1. Addresses Required
 
-Prepare the following addresses (multisigs recommended for production):
+Prepare the following addresses:
 
-```javascript
+```json
 {
-  // Token roles
-  "defaultAdmin": "0x...",        // Ultimate control (recommend multisig)
-  "pauser": "0x...",              // Emergency pause (recommend multisig/bot)
-  "upgrader": "0x...",            // Contract upgrades (recommend multisig)
-  "blacklister": "0x...",         // Regulatory compliance (recommend multisig)
+    // Token roles
+    "defaultAdmin": "0x...", // Ultimate control
+    "pauser": "0x...", // Emergency pause
+    "upgrader": "0x...", // Contract upgrades
+    "blacklister": "0x...", // Regulatory compliance
 
-  // Role admins
-  "pauserRoleAdmin": "0x...",     // Manages pausers (recommend multisig)
-  "upgraderRoleAdmin": "0x...",   // Manages upgraders (recommend multisig)
-  "blacklisterRoleAdmin": "0x...", // Manages blacklisters (recommend multisig)
+    // Role admins
+    "pauserRoleAdmin": "0x...", // Manages pausers
+    "upgraderRoleAdmin": "0x...", // Manages upgraders
+    "blacklisterRoleAdmin": "0x...", // Manages blacklisters
 
-  // MasterMinter
-  "masterMinterOwner": "0x..."    // Manages controllers (recommend multisig)
+    // MasterMinter
+    "masterMinterOwner": "0x..." // Manages controllers
 }
 ```
 
