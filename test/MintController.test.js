@@ -20,8 +20,8 @@ describe("MintController", function () {
         const bridgedCaminoV1Impl = await BridgedCaminoV1.deploy();
 
         const initParams = {
-            name: "BridgedCamino",
-            symbol: "WCAM.c",
+            name: "Bridged Camino (Third-Party Team)",
+            symbol: "CAM.c",
             defaultAdmin: deployer.address,
             pauser: deployer.address,
             upgrader: deployer.address,

@@ -174,8 +174,8 @@ Update your network parameters file with the correct addresses:
 ```json
 {
     "BridgedCaminoV1Module": {
-        "name": "Bridged Camino",
-        "symbol": "WCAM.c",
+        "name": "Bridged Camino (Third-Party Team)",
+        "symbol": "CAM.c",
         "defaultAdmin": "0x...", // Ultimate control
         "pauser": "0x...", // Emergency pause
         "upgrader": "0x...", // Contract upgrades

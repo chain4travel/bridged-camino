@@ -24,8 +24,8 @@ describe("BridgedCaminoV1", function () {
 
         const bridgedCaminoV1Impl = await BridgedCaminoV1.deploy();
 
-        const name = "BridgedCamino";
-        const symbol = "WCAM.c";
+        const name = "Bridged Camino (Third-Party Team)";
+        const symbol = "CAM.c";
 
         // Create initialization parameters struct
         const initParams = {
