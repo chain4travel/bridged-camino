@@ -62,7 +62,7 @@ module.exports = {
         ],
     },
     docgen: {
-        path: "./docs",
+        outputDir: "docs/api",
         pages: "single",
     },
     gasReporter: {

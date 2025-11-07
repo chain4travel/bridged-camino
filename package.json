@@ -6,7 +6,7 @@
         "test": "REPORT_GAS=true yarn hardhat test",
         "compile": "yarn hardhat compile",
         "format": "yarn prettier --write .",
-        "docgen": "yarn hardhat docgen && yarn prettier --write docs/",
+        "docgen": "yarn hardhat docgen && yarn prettier --write docs/api",
         "lint:prettier": "yarn prettier --check ."
     },
     "devDependencies": {
