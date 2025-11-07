@@ -1,15 +1,15 @@
 # Bridged Camino
 
-This repository contains the smart contracts for WCAM ERC20 tokens on EVM-compatible chains.
+This repository contains the smart contracts for CAM ERC20 tokens on EVM-compatible chains.
 
 ## Naming
 
 The token should be named as follows:
 
-- Token name: `BridgedCamino`
+- Token name: `Bridged Camino (Third-Party Team)`
 - Token symbol:
-    - If deployed and managed by a third-party bridge (not Camino Network Foundation): `WCAM.c` (`.c` indicates it's a bridged token originating from the `Camino` chain)
-    - If deployed and managed by the Camino Network Foundation: `WCAM`
+    - If deployed and managed by a third-party bridge (not Camino Network Foundation): `CAM.c` (`.c` indicates it's a bridged token originating from the `Camino` chain)
+    - If deployed and managed by the Camino Network Foundation: `CAM`
 
 ## Fork this Repository
 

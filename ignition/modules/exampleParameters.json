@@ -1,0 +1,15 @@
+{
+    "NOTE": "Parameters for BridgedCaminoV1Module. This deploys both the token and MasterMinter atomically. Using multisigs in production is recommended.",
+    "BridgedCaminoV1Module": {
+        "name": "Bridged Camino Token (Team name)",
+        "symbol": "CAM.c",
+        "defaultAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "pauser": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "upgrader": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "blacklister": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "pauserRoleAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "upgraderRoleAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "blacklisterRoleAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "masterMinterOwner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    }
+}

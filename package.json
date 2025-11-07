@@ -3,10 +3,10 @@
     "description": "An ERC20-based token for bridged CAM on other chains",
     "version": "1.0.0",
     "scripts": {
-        "test": "REPORT_GAS=true yarn hardhat test",
+        "test": "yarn hardhat test",
         "compile": "yarn hardhat compile",
         "format": "yarn prettier --write .",
-        "docgen": "yarn hardhat docgen && yarn prettier --write docs/",
+        "docgen": "yarn hardhat docgen && yarn prettier --write docs/api",
         "lint:prettier": "yarn prettier --check ."
     },
     "devDependencies": {

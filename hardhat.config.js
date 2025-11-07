@@ -62,10 +62,11 @@ module.exports = {
         ],
     },
     docgen: {
-        path: "./docs",
+        outputDir: "docs/api",
         pages: "single",
     },
     gasReporter: {
+        enabled: (process.env.REPORT_GAS) ? true : false,
         currency: (process.env.CURRENCY) ? process.env.CURRENCY : "USDC",
         currencyDisplayPrecision: 5,
         coinmarketcap: process.env.CMC_API_KEY,
