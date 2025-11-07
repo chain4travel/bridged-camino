@@ -1,6 +1,6 @@
 {
-    "NOTE": "Parameters for BridgedCaminoWithMasterMinterModule. This deploys both the token and MasterMinter atomically. All addresses should be multisigs in production.",
-    "BridgedCaminoWithMasterMinterModule": {
+    "NOTE": "Parameters for BridgedCaminoV1Module. This deploys both the token and MasterMinter atomically. Using multisigs in production is recommended.",
+    "BridgedCaminoV1Module": {
         "name": "BridgedCamino",
         "symbol": "WCAM.c",
         "defaultAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",

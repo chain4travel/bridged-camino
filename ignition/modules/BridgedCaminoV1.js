@@ -11,7 +11,7 @@ const { buildModule } = require("@nomicfoundation/hardhat-ignition/modules");
  * 1. Deploying MasterMinter with address(0) as temporary minter manager, deployer as temporary owner
  * 2. Deploying BridgedCaminoV1 with MasterMinter as minterRoleAdmin
  * 3. Calling setMinterManager() on MasterMinter (from deployer) to connect them
- * 4. Transferring MasterMinter ownership to masterMinterOwner
+ * 4. Transferring MasterMinter ownership from deployer to masterMinterOwner
  *
  * This approach:
  * - Is completely atomic (no frontrunning risk)
@@ -31,7 +31,7 @@ const { buildModule } = require("@nomicfoundation/hardhat-ignition/modules");
  * - MasterMinter automatically receives MINTER_ROLE_ADMIN
  * - Deployer has no privileges after deployment completes
  */
-module.exports = buildModule("BridgedCaminoWithMasterMinterModule", (m) => {
+module.exports = buildModule("BridgedCaminoV1Module", (m) => {
     // Get deployer account (the account running the deployment)
     const deployer = m.getAccount(0);
 
