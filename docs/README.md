@@ -14,11 +14,11 @@ See [**Contract API Reference**](./api/index.md) for detailed contract documenta
 
 ## Documentation
 
-| Document                              | Description                                 |
-| ------------------------------------- | ------------------------------------------- |
-| [Deployment Guide](./DEPLOYMENT.md)   | Complete deployment and configuration guide |
-| [Contract API](./api/index.md)        | Auto-generated Solidity documentation       |
-| [Project README](../README.md)        | Project overview and development guide      |
+| Document                            | Description                                 |
+| ----------------------------------- | ------------------------------------------- |
+| [Deployment Guide](./DEPLOYMENT.md) | Complete deployment and configuration guide |
+| [Contract API](./api/index.md)      | Auto-generated Solidity documentation       |
+| [Project README](../README.md)      | Project overview and development guide      |
 
 ## Key Features
 
@@ -72,9 +72,9 @@ See [Deployment Guide](./DEPLOYMENT.md#architecture) for detailed architecture d
 ### Running Tests
 
 ```bash
-yarn test                    # Run all tests
-yarn test test/Controller    # Run specific test file
-REPORT_GAS=true yarn test   # With gas reporting
+yarn test                                 # Run all tests
+yarn test test/BridgedCaminoV1.test.js    # Run specific test file
+REPORT_GAS=true yarn test                 # With gas reporting
 ```
 
 ### Generating Documentation

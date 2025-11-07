@@ -98,6 +98,31 @@ The system uses a three-tier hierarchy for minting control:
     - Can mint up to their allowance
     - Allowance decreases with each mint
 
+```
+masterMinterOwner
+        │
+        │ owns
+        ▼
+┌──────────────────┐
+│  MasterMinter    │ ← Has MINTER_ROLE_ADMIN
+└────────┬─────────┘
+         │ manages
+         ▼
+    Controllers ────────┐
+    (EOAs/Bots)         │ configure
+         │              │
+         │              ▼
+         │       ┌──────────────┐
+         └──────→│   Minters    │ ← Have MINTER_ROLE
+                 │  (Bridges)   │
+                 └──────┬───────┘
+                        │ mint tokens
+                        ▼
+                 ┌──────────────┐
+                 │  Recipients  │
+                 └──────────────┘
+```
+
 ### Why This Pattern?
 
 This three-tier system provides:
@@ -153,14 +178,14 @@ Update your network parameters file with the correct addresses:
     "BridgedCaminoV1Module": {
         "name": "Bridged Camino",
         "symbol": "WCAM.c",
-        "defaultAdmin": "0x...",           // Ultimate control
-        "pauser": "0x...",                 // Emergency pause
-        "upgrader": "0x...",               // Contract upgrades
-        "blacklister": "0x...",            // Compliance
-        "pauserRoleAdmin": "0x...",        // Manages pausers
-        "upgraderRoleAdmin": "0x...",      // Manages upgraders
-        "blacklisterRoleAdmin": "0x...",   // Manages blacklisters
-        "masterMinterOwner": "0x..."       // Manages controllers
+        "defaultAdmin": "0x...", // Ultimate control
+        "pauser": "0x...", // Emergency pause
+        "upgrader": "0x...", // Contract upgrades
+        "blacklister": "0x...", // Compliance
+        "pauserRoleAdmin": "0x...", // Manages pausers
+        "upgraderRoleAdmin": "0x...", // Manages upgraders
+        "blacklisterRoleAdmin": "0x...", // Manages blacklisters
+        "masterMinterOwner": "0x..." // Manages controllers
     }
 }
 ```
@@ -183,14 +208,15 @@ networks: {
 ### Step 1: Deploy Everything
 
 ```bash
-npx hardhat ignition deploy ignition/modules/BridgedCaminoV1.js \
+yarn hardhat ignition deploy ignition/modules/BridgedCaminoV1.js \
   --network <network> \
   --parameters ignition/modules/<network>Parameters.json
 ```
 
 Example for Camino mainnet:
+
 ```bash
-npx hardhat ignition deploy ignition/modules/BridgedCaminoV1.js \
+yarn hardhat ignition deploy ignition/modules/BridgedCaminoV1.js \
   --network camino \
   --parameters ignition/modules/caminoParameters.json
 ```
@@ -295,20 +321,19 @@ await masterMinter.connect(controller).decrementMinterAllowance(ethers.parseEthe
 #### Remove Minter
 
 **Normal removal** (controller removes their own minter):
+
 ```javascript
 await masterMinter.connect(controller).removeMinter();
 ```
 
 **Emergency removal** (if controller is compromised/unresponsive):
 
-The MasterMinter owner can assign the compromised minter to an emergency controller:
+The MasterMinter owner can assign the compromised minter to an emergency controller
+(multiple controllers can control the same minter):
 
 ```javascript
 // 1. Owner assigns emergency controller to the compromised minter
-await masterMinter.connect(owner).configureController(
-  emergencyController,
-  compromisedMinterAddress
-);
+await masterMinter.connect(owner).configureController(emergencyController, compromisedMinterAddress);
 
 // 2. Emergency controller removes the minter
 await masterMinter.connect(emergencyController).removeMinter();
@@ -367,16 +392,18 @@ The deployer has zero control after deployment completes.
 
 ### On-Chain Verification
 
+Set the required API key configuration parameters in `hardhat.config.js`.
+
 ```bash
 # Verify implementation
-npx hardhat verify --network <network> <IMPLEMENTATION_ADDRESS>
+yarn hardhat verify --network <network> <IMPLEMENTATION_ADDRESS>
 
 # Verify proxy (requires constructor args)
-npx hardhat verify --network <network> <PROXY_ADDRESS> \
+yarn hardhat verify --network <network> <PROXY_ADDRESS> \
   <IMPLEMENTATION_ADDRESS> <INIT_DATA_HASH>
 
 # Verify MasterMinter
-npx hardhat verify --network <network> <MASTER_MINTER_ADDRESS> \
+yarn hardhat verify --network <network> <MASTER_MINTER_ADDRESS> \
   <TOKEN_PROXY_ADDRESS> <MASTER_MINTER_OWNER>
 ```
 
@@ -411,7 +438,7 @@ Before going to production:
 - [ ] Minter allowances follow principle of least privilege
 - [ ] Emergency procedures are documented and tested
 - [ ] All contracts are verified on block explorer
-- [ ] Deployment artifacts are backed up
+- [ ] Deployment artifacts are backed up (commit `ignition/deployments` folder into your VCS)
 
 ## Emergency Procedures
 
@@ -425,23 +452,23 @@ await token.connect(pauser).pause();
 ### Remove Compromised Minter
 
 **If controller is responsive:**
+
 ```javascript
 await masterMinter.connect(controller).removeMinter();
 ```
 
 **If controller is compromised/unresponsive:**
+
 ```javascript
 // 1. MasterMinter owner assigns emergency controller
-await masterMinter.connect(owner).configureController(
-  emergencyController,
-  compromisedMinterAddress
-);
+await masterMinter.connect(owner).configureController(emergencyController, compromisedMinterAddress);
 
 // 2. Emergency controller removes the minter
 await masterMinter.connect(emergencyController).removeMinter();
 ```
 
 **Fallback (requires DEFAULT_ADMIN_ROLE):**
+
 ```javascript
 // If MasterMinter owner is unavailable, DEFAULT_ADMIN_ROLE can remove by granting itself permission
 // 1. Grant MINTER_ROLE_ADMIN to self
@@ -454,8 +481,6 @@ await token.connect(defaultAdmin).removeMinter(compromisedMinterAddress);
 // 3. (Optional) Revoke MINTER_ROLE_ADMIN from self to restore separation
 await token.connect(defaultAdmin).revokeRole(MINTER_ROLE_ADMIN, defaultAdmin.address);
 ```
-
-**Best practice:** Pre-sign emergency removal transactions and keep them ready for instant execution.
 
 ### Blacklist Compromised Address
 
@@ -475,11 +500,3 @@ await token.connect(upgrader).upgradeToAndCall(
     "0x", // No initialization call
 );
 ```
-
-## Support
-
-For issues or questions:
-
-- GitHub: https://github.com/chain4travel/bridged-camino
-- Documentation: See `docs/` folder
-- Contract API: See `api/index.md`
