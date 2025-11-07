@@ -92,12 +92,6 @@ yarn compile    # Compile contracts
 yarn clean      # Clean artifacts
 ```
 
-## Links
-
-- **GitHub**: https://github.com/chain4travel/bridged-camino
-- **Deployment Guide**: [DEPLOYMENT.md](./DEPLOYMENT.md)
-- **API Reference**: [api/index.md](./api/index.md)
-
 ## License
 
 BSD-3-Clause - See [LICENSE](../LICENSE) for details.
