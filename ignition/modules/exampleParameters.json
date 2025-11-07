@@ -3,13 +3,13 @@
     "BridgedCaminoWithMasterMinterModule": {
         "name": "BridgedCamino",
         "symbol": "WCAM.c",
-        "defaultAdmin": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
-        "pauser": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
-        "upgrader": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
-        "blacklister": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
-        "pauserRoleAdmin": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
-        "upgraderRoleAdmin": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
-        "blacklisterRoleAdmin": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21",
-        "masterMinterOwner": "0xFe77dcE375C3814F15F8035bCAC1A791D3dCdf21"
+        "defaultAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "pauser": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "upgrader": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "blacklister": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "pauserRoleAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "upgraderRoleAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "blacklisterRoleAdmin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "masterMinterOwner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
     }
 }

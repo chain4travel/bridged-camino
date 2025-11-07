@@ -43,7 +43,7 @@ The system uses a three-tier hierarchy for minting control:
 
 ```
 ┌──────────────────────────────┐
-│  Governance Multisig         │  (masterMinterOwner)
+│  Owner Address               │  (masterMinterOwner, recommend multisig)
 │  - Manages controllers       │
 │  - Can remove controllers    │
 └──────────┬───────────────────┘
@@ -76,19 +76,21 @@ The system uses a three-tier hierarchy for minting control:
 
 | Role                 | Holder                    | Purpose                                      |
 | -------------------- | ------------------------- | -------------------------------------------- |
-| `DEFAULT_ADMIN_ROLE` | Governance multisig       | Ultimate control, can grant any role admin   |
+| `DEFAULT_ADMIN_ROLE` | Admin address             | Ultimate control, can grant any role admin   |
 | `MINTER_ROLE_ADMIN`  | **MasterMinter contract** | Manages minters (grants/revokes MINTER_ROLE) |
 | `MINTER_ROLE`        | Bridge contracts          | Can mint tokens within allowance             |
-| `PAUSER_ROLE`        | Pauser multisig/bot       | Can pause/unpause the token                  |
-| `UPGRADER_ROLE`      | Governance multisig       | Can upgrade the implementation               |
-| `BLACKLISTER_ROLE`   | Compliance multisig/bot   | Can blacklist/unblacklist addresses          |
+| `PAUSER_ROLE`        | Pauser address            | Can pause/unpause the token                  |
+| `UPGRADER_ROLE`      | Upgrader address          | Can upgrade the implementation               |
+| `BLACKLISTER_ROLE`   | Blacklister address       | Can blacklist/unblacklist addresses          |
+
+**Note:** Using multisig wallets for role holders is strongly recommended for production security.
 
 ### MasterMinter Workflow
 
-1. **Owner** (governance multisig) calls `configureController(controller, minter)`
+1. **Owner** (masterMinterOwner address) calls `configureController(controller, minter)`
     - Associates a controller address with a minter address
 
-2. **Controller** (operations EOA/bot) calls `configureMinter(allowance)`
+2. **Controller** (operations address/bot) calls `configureMinter(allowance)`
     - MasterMinter grants `MINTER_ROLE` to the minter
     - Sets the minter's allowance on the token
 
@@ -110,45 +112,55 @@ This three-tier system provides:
 
 ### 1. Addresses Required
 
-All addresses should be **multisigs in production**:
+Prepare the following addresses (multisigs recommended for production):
 
 ```javascript
 {
   // Token roles
-  "defaultAdmin": "<governance-multisig>",        // Ultimate control
-  "pauser": "<pauser-multisig-or-bot>",          // Emergency pause
-  "upgrader": "<governance-multisig>",           // Contract upgrades
-  "blacklister": "<compliance-multisig>",        // Regulatory compliance
+  "defaultAdmin": "0x...",        // Ultimate control (recommend multisig)
+  "pauser": "0x...",              // Emergency pause (recommend multisig/bot)
+  "upgrader": "0x...",            // Contract upgrades (recommend multisig)
+  "blacklister": "0x...",         // Regulatory compliance (recommend multisig)
 
   // Role admins
-  "pauserRoleAdmin": "<governance-multisig>",    // Manages pausers
-  "upgraderRoleAdmin": "<governance-multisig>",  // Manages upgraders
-  "blacklisterRoleAdmin": "<governance-multisig>", // Manages blacklisters
+  "pauserRoleAdmin": "0x...",     // Manages pausers (recommend multisig)
+  "upgraderRoleAdmin": "0x...",   // Manages upgraders (recommend multisig)
+  "blacklisterRoleAdmin": "0x...", // Manages blacklisters (recommend multisig)
 
   // MasterMinter
-  "masterMinterOwner": "<governance-multisig>"   // Manages controllers
+  "masterMinterOwner": "0x..."    // Manages controllers (recommend multisig)
 }
 ```
 
-**Note:** All admin addresses should be multisigs for production security.
+**Security Note:** Using multisig wallets (e.g., Gnosis Safe) for admin addresses is strongly recommended for production deployments to prevent single points of failure.
 
 ### 2. Configuration File
 
-Update `ignition/modules/exampleParameters.json` with your addresses:
+Copy the example parameters file and update with your addresses:
+
+```bash
+# Create network-specific parameters file
+cp ignition/modules/exampleParameters.json ignition/modules/<network>Parameters.json
+
+# Edit the file with your addresses
+# Example: caminoParameters.json, columbusParameters.json
+```
+
+Update your network parameters file with the correct addresses:
 
 ```json
 {
     "BridgedCaminoV1Module": {
         "name": "Bridged Camino",
         "symbol": "WCAM.c",
-        "defaultAdmin": "0x...",
-        "pauser": "0x...",
-        "upgrader": "0x...",
-        "blacklister": "0x...",
-        "pauserRoleAdmin": "0x...",
-        "upgraderRoleAdmin": "0x...",
-        "blacklisterRoleAdmin": "0x...",
-        "masterMinterOwner": "0x..."
+        "defaultAdmin": "0x...",           // Ultimate control
+        "pauser": "0x...",                 // Emergency pause
+        "upgrader": "0x...",               // Contract upgrades
+        "blacklister": "0x...",            // Compliance
+        "pauserRoleAdmin": "0x...",        // Manages pausers
+        "upgraderRoleAdmin": "0x...",      // Manages upgraders
+        "blacklisterRoleAdmin": "0x...",   // Manages blacklisters
+        "masterMinterOwner": "0x..."       // Manages controllers
     }
 }
 ```
@@ -173,7 +185,14 @@ networks: {
 ```bash
 npx hardhat ignition deploy ignition/modules/BridgedCaminoV1.js \
   --network <network> \
-  --parameters ignition/modules/exampleParameters.json
+  --parameters ignition/modules/<network>Parameters.json
+```
+
+Example for Camino mainnet:
+```bash
+npx hardhat ignition deploy ignition/modules/BridgedCaminoV1.js \
+  --network camino \
+  --parameters ignition/modules/caminoParameters.json
 ```
 
 **What This Does (Atomically):**
@@ -307,10 +326,10 @@ await masterMinter.connect(emergencyController).removeMinter();
 Address: 0x... (ERC1967 Proxy)
 
 Roles:
-├─ DEFAULT_ADMIN_ROLE → governanceMultisig
-├─ PAUSER_ROLE → pauserMultisig
-├─ UPGRADER_ROLE → governanceMultisig
-├─ BLACKLISTER_ROLE → complianceMultisig
+├─ DEFAULT_ADMIN_ROLE → defaultAdmin address
+├─ PAUSER_ROLE → pauser address
+├─ UPGRADER_ROLE → upgrader address
+├─ BLACKLISTER_ROLE → blacklister address
 ├─ MINTER_ROLE_ADMIN → MasterMinter contract ⭐
 └─ MINTER_ROLE → (none initially, controllers add them)
 
@@ -326,7 +345,7 @@ State:
 Address: 0x...
 
 State:
-├─ Owner → masterMinterOwner (multisig)
+├─ Owner → masterMinterOwner address
 ├─ Minter Manager → BridgedCaminoV1 Proxy
 ├─ Controllers → (none initially)
 └─ Has MINTER_ROLE_ADMIN on token ⭐
@@ -380,12 +399,11 @@ await expect(token.mint(recipient, 100)).to.be.reverted;
 
 Before going to production:
 
-- [ ] All admin addresses are multisigs (not EOAs)
-- [ ] `masterMinterOwner` is the same as `defaultAdmin`
+- [ ] All admin role addresses are multisigs (recommended, not EOAs)
 - [ ] Deployer address has no roles after deployment
 - [ ] MasterMinter has `MINTER_ROLE_ADMIN` on the token
 - [ ] MasterMinter points to correct token address
-- [ ] MasterMinter owner is the governance multisig
+- [ ] MasterMinter owner is properly configured
 - [ ] Test pause/unpause functionality
 - [ ] Test blacklist functionality
 - [ ] Test upgrade mechanism (on testnet)
@@ -423,10 +441,18 @@ await masterMinter.connect(owner).configureController(
 await masterMinter.connect(emergencyController).removeMinter();
 ```
 
-**Alternative (requires DEFAULT_ADMIN_ROLE):**
+**Fallback (requires DEFAULT_ADMIN_ROLE):**
 ```javascript
-// If MasterMinter owner is unavailable, DEFAULT_ADMIN_ROLE can directly remove
+// If MasterMinter owner is unavailable, DEFAULT_ADMIN_ROLE can remove by granting itself permission
+// 1. Grant MINTER_ROLE_ADMIN to self
+const MINTER_ROLE_ADMIN = await token.MINTER_ROLE_ADMIN();
+await token.connect(defaultAdmin).grantRole(MINTER_ROLE_ADMIN, defaultAdmin.address);
+
+// 2. Remove the minter
 await token.connect(defaultAdmin).removeMinter(compromisedMinterAddress);
+
+// 3. (Optional) Revoke MINTER_ROLE_ADMIN from self to restore separation
+await token.connect(defaultAdmin).revokeRole(MINTER_ROLE_ADMIN, defaultAdmin.address);
 ```
 
 **Best practice:** Pre-sign emergency removal transactions and keep them ready for instant execution.
@@ -456,4 +482,4 @@ For issues or questions:
 
 - GitHub: https://github.com/chain4travel/bridged-camino
 - Documentation: See `docs/` folder
-- Contract API: See `docs/api/index.md`
+- Contract API: See `api/index.md`

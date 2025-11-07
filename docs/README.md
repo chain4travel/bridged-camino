@@ -8,25 +8,17 @@ Welcome to the Bridged Camino token documentation. This is a UUPS-upgradeable ER
 
 See [**Deployment Guide**](./DEPLOYMENT.md) for complete deployment instructions.
 
-Quick deploy:
-
-```bash
-npx hardhat ignition deploy ignition/modules/BridgedCaminoV1.js \
-  --network <network> \
-  --parameters ignition/modules/exampleParameters.json
-```
-
 ### For Developers
 
-See [**Contract API Reference**](./API.md) for detailed contract documentation.
+See [**Contract API Reference**](./api/index.md) for detailed contract documentation.
 
 ## Documentation
 
-| Document                            | Description                                 |
-| ----------------------------------- | ------------------------------------------- |
-| [Deployment Guide](./DEPLOYMENT.md) | Complete deployment and configuration guide |
-| [Contract API](./API.md)            | Auto-generated Solidity documentation       |
-| [README](../README.md)              | Project overview and development guide      |
+| Document                              | Description                                 |
+| ------------------------------------- | ------------------------------------------- |
+| [Deployment Guide](./DEPLOYMENT.md)   | Complete deployment and configuration guide |
+| [Contract API](./api/index.md)        | Auto-generated Solidity documentation       |
+| [Project README](../README.md)        | Project overview and development guide      |
 
 ## Key Features
 
@@ -48,92 +40,13 @@ See [**Contract API Reference**](./API.md) for detailed contract documentation.
 
 ## Architecture
 
-### Token Architecture
+The system uses a three-tier minting hierarchy:
 
-```
-┌─────────────────────────┐
-│  ERC1967 Proxy          │ ← Users interact here
-│  (Your token address)   │
-└───────────┬─────────────┘
-            │ delegates to
-            ▼
-┌─────────────────────────┐
-│  BridgedCaminoV1        │ ← Implementation (upgradeable)
-│  (Logic contract)       │
-└─────────────────────────┘
-```
+1. **Owner** (masterMinterOwner address) manages controllers via MasterMinter
+2. **Controllers** (addresses/bots) manage individual minters and set allowances
+3. **Minters** (bridge contracts) mint tokens within their allowance quotas
 
-### Minting Architecture
-
-```
-Governance Multisig
-        │
-        │ owns
-        ▼
-┌──────────────────┐
-│  MasterMinter    │ ← Has MINTER_ROLE_ADMIN
-└────────┬─────────┘
-         │ manages
-         ▼
-   Controllers ────────┐
-    (EOAs/Bots)        │ configure
-         │             │
-         │             ▼
-         │      ┌──────────────┐
-         └─────→│  Minters     │ ← Have MINTER_ROLE
-                │  (Bridges)   │
-                └──────┬───────┘
-                       │ mint tokens
-                       ▼
-                ┌──────────────┐
-                │  Recipients  │
-                └──────────────┘
-```
-
-## Roles & Permissions
-
-### Token Roles
-
-| Role                 | Purpose           | Recommended Holder        |
-| -------------------- | ----------------- | ------------------------- |
-| `DEFAULT_ADMIN_ROLE` | Ultimate control  | Governance multisig       |
-| `MINTER_ROLE_ADMIN`  | Manages minters   | **MasterMinter contract** |
-| `MINTER_ROLE`        | Can mint tokens   | Bridge contracts          |
-| `PAUSER_ROLE`        | Emergency pause   | Ops multisig/bot          |
-| `UPGRADER_ROLE`      | Contract upgrades | Governance multisig       |
-| `BLACKLISTER_ROLE`   | Compliance        | Compliance multisig       |
-
-### MasterMinter Roles
-
-| Role       | Purpose             | Recommended Holder  |
-| ---------- | ------------------- | ------------------- |
-| `owner`    | Manages controllers | Governance multisig |
-| Controller | Manages 1 minter    | Operations EOA/bot  |
-| Minter     | Mints tokens        | Bridge contract     |
-
-## Workflows
-
-### Adding a New Bridge
-
-1. **Governance** calls `MasterMinter.configureController(controller, bridge)`
-2. **Controller** calls `MasterMinter.configureMinter(allowance)`
-3. **Bridge** can now call `Token.mint(recipient, amount)`
-
-See [Deployment Guide](./DEPLOYMENT.md#post-deployment-configuration) for details.
-
-### Emergency Minter Removal
-
-```javascript
-// Option 1: Controller removes their minter
-await masterMinter.connect(controller).removeMinter();
-
-// Option 2: Owner assigns emergency controller to compromised minter
-await masterMinter.connect(owner).configureController(emergencyController, compromisedMinter);
-await masterMinter.connect(emergencyController).removeMinter();
-
-// Option 3: DEFAULT_ADMIN_ROLE directly removes (fallback)
-await token.connect(defaultAdmin).removeMinter(bridgeAddress);
-```
+See [Deployment Guide](./DEPLOYMENT.md#architecture) for detailed architecture diagrams and role descriptions.
 
 ## Security
 
@@ -147,7 +60,7 @@ await token.connect(defaultAdmin).removeMinter(bridgeAddress);
 
 ### Best Practices
 
-✅ Use multisigs for all admin roles
+✅ Use multisig wallets for admin role addresses (strongly recommended)
 ✅ Set conservative minter allowances
 ✅ Monitor minter allowances regularly
 ✅ Have emergency procedures documented
@@ -170,7 +83,7 @@ REPORT_GAS=true yarn test   # With gas reporting
 yarn hardhat docgen
 ```
 
-This generates `docs/API.md` with complete contract documentation.
+This generates `docs/api/index.md` with complete contract documentation.
 
 ### Building
 
@@ -183,7 +96,7 @@ yarn clean      # Clean artifacts
 
 - **GitHub**: https://github.com/chain4travel/bridged-camino
 - **Deployment Guide**: [DEPLOYMENT.md](./DEPLOYMENT.md)
-- **API Reference**: [API.md](./API.md)
+- **API Reference**: [api/index.md](./api/index.md)
 
 ## License
 
