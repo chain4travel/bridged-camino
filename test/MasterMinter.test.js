@@ -134,7 +134,9 @@ describe("MasterMinter", function () {
         });
 
         it("Should allow owner to remove controllers", async function () {
-            const { masterMinter, owner, controller1 } = await loadFixture(masterMinterWithConfiguredControllersFixture);
+            const { masterMinter, owner, controller1 } = await loadFixture(
+                masterMinterWithConfiguredControllersFixture,
+            );
 
             await expect(masterMinter.connect(owner).removeController(controller1.address))
                 .to.emit(masterMinter, "ControllerRemoved")
@@ -146,8 +148,9 @@ describe("MasterMinter", function () {
 
     describe("MintController functionality", function () {
         it("Should allow controllers to configure minters", async function () {
-            const { masterMinter, minterManager, controller1, minter1 } =
-                await loadFixture(masterMinterWithConfiguredControllersFixture);
+            const { masterMinter, minterManager, controller1, minter1 } = await loadFixture(
+                masterMinterWithConfiguredControllersFixture,
+            );
 
             const allowance = ethers.parseEther("1000");
 
@@ -160,8 +163,9 @@ describe("MasterMinter", function () {
         });
 
         it("Should allow controllers to increment minter allowances", async function () {
-            const { masterMinter, minterManager, controller1, minter1 } =
-                await loadFixture(masterMinterWithConfiguredControllersFixture);
+            const { masterMinter, minterManager, controller1, minter1 } = await loadFixture(
+                masterMinterWithConfiguredControllersFixture,
+            );
 
             const initialAllowance = ethers.parseEther("1000");
             const increment = ethers.parseEther("500");
@@ -176,8 +180,9 @@ describe("MasterMinter", function () {
         });
 
         it("Should allow controllers to decrement minter allowances", async function () {
-            const { masterMinter, minterManager, controller1, minter1 } =
-                await loadFixture(masterMinterWithConfiguredControllersFixture);
+            const { masterMinter, minterManager, controller1, minter1 } = await loadFixture(
+                masterMinterWithConfiguredControllersFixture,
+            );
 
             const initialAllowance = ethers.parseEther("1000");
             const decrement = ethers.parseEther("300");
@@ -192,8 +197,9 @@ describe("MasterMinter", function () {
         });
 
         it("Should allow controllers to remove minters", async function () {
-            const { masterMinter, minterManager, controller1, minter1 } =
-                await loadFixture(masterMinterWithConfiguredControllersFixture);
+            const { masterMinter, minterManager, controller1, minter1 } = await loadFixture(
+                masterMinterWithConfiguredControllersFixture,
+            );
 
             await masterMinter.connect(controller1).configureMinter(ethers.parseEther("1000"));
 
@@ -241,9 +247,7 @@ describe("MasterMinter", function () {
 
             const oldMinterManager = await masterMinter.getMinterManager();
 
-            await expect(
-                masterMinter.connect(owner).setMinterManager(await newMinterManagerImpl.getAddress()),
-            )
+            await expect(masterMinter.connect(owner).setMinterManager(await newMinterManagerImpl.getAddress()))
                 .to.emit(masterMinter, "MinterManagerSet")
                 .withArgs(oldMinterManager, await newMinterManagerImpl.getAddress());
 

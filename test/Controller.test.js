@@ -59,8 +59,9 @@ describe("Controller", function () {
         });
 
         it("Should allow reconfiguring an existing controller with a different worker", async function () {
-            const { controller, owner, controller1, worker1, worker2 } =
-                await loadFixture(controllerWithConfiguredControllersFixture);
+            const { controller, owner, controller1, worker1, worker2 } = await loadFixture(
+                controllerWithConfiguredControllersFixture,
+            );
 
             // Reconfigure controller1 with worker2
             await expect(controller.connect(owner).configureController(controller1.address, worker2.address))

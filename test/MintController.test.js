@@ -129,9 +129,7 @@ describe("MintController", function () {
             await mintController.connect(owner).configureController(controller1.address, controller1.address);
 
             // Trying to call configureMinter should fail because minterManager is not set
-            await expect(
-                mintController.connect(controller1).configureMinter(1000)
-            ).to.be.reverted; // Will revert when trying to call address(0)
+            await expect(mintController.connect(controller1).configureMinter(1000)).to.be.reverted; // Will revert when trying to call address(0)
         });
     });
 
@@ -143,9 +141,7 @@ describe("MintController", function () {
             const BridgedCaminoV1 = await ethers.getContractFactory("BridgedCaminoV1");
             const newMinterManagerImpl = await BridgedCaminoV1.deploy();
 
-            await expect(
-                mintController.connect(owner).setMinterManager(await newMinterManagerImpl.getAddress()),
-            )
+            await expect(mintController.connect(owner).setMinterManager(await newMinterManagerImpl.getAddress()))
                 .to.emit(mintController, "MinterManagerSet")
                 .withArgs(await mintController.getMinterManager(), await newMinterManagerImpl.getAddress());
 
@@ -171,8 +167,9 @@ describe("MintController", function () {
 
     describe("configureMinter", function () {
         it("Should allow controller to configure their minter with allowance", async function () {
-            const { mintController, minterManager, minterManagerAdmin, controller1, minter1 } =
-                await loadFixture(mintControllerWithConfiguredControllersFixture);
+            const { mintController, minterManager, minterManagerAdmin, controller1, minter1 } = await loadFixture(
+                mintControllerWithConfiguredControllersFixture,
+            );
 
             const allowance = ethers.parseEther("1000");
 
@@ -186,8 +183,9 @@ describe("MintController", function () {
         });
 
         it("Should allow controller to update their minter's allowance", async function () {
-            const { mintController, minterManager, controller1, minter1 } =
-                await loadFixture(mintControllerWithConfiguredControllersFixture);
+            const { mintController, minterManager, controller1, minter1 } = await loadFixture(
+                mintControllerWithConfiguredControllersFixture,
+            );
 
             const allowance1 = ethers.parseEther("1000");
             const allowance2 = ethers.parseEther("2000");
@@ -210,8 +208,9 @@ describe("MintController", function () {
 
     describe("incrementMinterAllowance", function () {
         it("Should allow controller to increment their minter's allowance", async function () {
-            const { mintController, minterManager, controller1, minter1 } =
-                await loadFixture(mintControllerWithConfiguredControllersFixture);
+            const { mintController, minterManager, controller1, minter1 } = await loadFixture(
+                mintControllerWithConfiguredControllersFixture,
+            );
 
             const initialAllowance = ethers.parseEther("1000");
             const increment = ethers.parseEther("500");
@@ -230,9 +229,10 @@ describe("MintController", function () {
         it("Should revert if increment is zero", async function () {
             const { mintController, controller1 } = await loadFixture(mintControllerWithConfiguredControllersFixture);
 
-            await expect(
-                mintController.connect(controller1).incrementMinterAllowance(0),
-            ).to.be.revertedWithCustomError(mintController, "AllowanceIncrementZero");
+            await expect(mintController.connect(controller1).incrementMinterAllowance(0)).to.be.revertedWithCustomError(
+                mintController,
+                "AllowanceIncrementZero",
+            );
         });
 
         it("Should revert if minter is not active", async function () {
@@ -265,8 +265,9 @@ describe("MintController", function () {
 
     describe("decrementMinterAllowance", function () {
         it("Should allow controller to decrement their minter's allowance", async function () {
-            const { mintController, minterManager, controller1, minter1 } =
-                await loadFixture(mintControllerWithConfiguredControllersFixture);
+            const { mintController, minterManager, controller1, minter1 } = await loadFixture(
+                mintControllerWithConfiguredControllersFixture,
+            );
 
             const initialAllowance = ethers.parseEther("1000");
             const decrement = ethers.parseEther("300");
@@ -281,8 +282,9 @@ describe("MintController", function () {
         });
 
         it("Should cap decrement at current allowance (safe decrement)", async function () {
-            const { mintController, minterManager, controller1, minter1 } =
-                await loadFixture(mintControllerWithConfiguredControllersFixture);
+            const { mintController, minterManager, controller1, minter1 } = await loadFixture(
+                mintControllerWithConfiguredControllersFixture,
+            );
 
             const initialAllowance = ethers.parseEther("100");
             const decrement = ethers.parseEther("200"); // More than available
@@ -299,9 +301,10 @@ describe("MintController", function () {
         it("Should revert if decrement is zero", async function () {
             const { mintController, controller1 } = await loadFixture(mintControllerWithConfiguredControllersFixture);
 
-            await expect(
-                mintController.connect(controller1).decrementMinterAllowance(0),
-            ).to.be.revertedWithCustomError(mintController, "AllowanceDecrementZero");
+            await expect(mintController.connect(controller1).decrementMinterAllowance(0)).to.be.revertedWithCustomError(
+                mintController,
+                "AllowanceDecrementZero",
+            );
         });
 
         it("Should revert if minter is not active", async function () {
@@ -323,8 +326,9 @@ describe("MintController", function () {
 
     describe("removeMinter", function () {
         it("Should allow controller to remove their minter", async function () {
-            const { mintController, minterManager, controller1, minter1 } =
-                await loadFixture(mintControllerWithConfiguredControllersFixture);
+            const { mintController, minterManager, controller1, minter1 } = await loadFixture(
+                mintControllerWithConfiguredControllersFixture,
+            );
 
             // Configure minter first
             await mintController.connect(controller1).configureMinter(ethers.parseEther("1000"));
@@ -377,8 +381,9 @@ describe("MintController", function () {
 
     describe("Integration with BridgedCaminoV1", function () {
         it("Should enable minter to mint after being configured", async function () {
-            const { mintController, minterManager, controller1, minter1, recipient } =
-                await loadFixture(mintControllerWithConfiguredControllersFixture);
+            const { mintController, minterManager, controller1, minter1, recipient } = await loadFixture(
+                mintControllerWithConfiguredControllersFixture,
+            );
 
             const allowance = ethers.parseEther("1000");
             const mintAmount = ethers.parseEther("100");
@@ -396,8 +401,9 @@ describe("MintController", function () {
         });
 
         it("Should prevent minting after minter is removed", async function () {
-            const { mintController, minterManager, controller1, minter1, recipient } =
-                await loadFixture(mintControllerWithConfiguredControllersFixture);
+            const { mintController, minterManager, controller1, minter1, recipient } = await loadFixture(
+                mintControllerWithConfiguredControllersFixture,
+            );
 
             const allowance = ethers.parseEther("1000");
 
@@ -406,7 +412,8 @@ describe("MintController", function () {
             await mintController.connect(controller1).removeMinter();
 
             // Minter should not be able to mint
-            await expect(minterManager.connect(minter1).mint(recipient.address, ethers.parseEther("100"))).to.be.reverted;
+            await expect(minterManager.connect(minter1).mint(recipient.address, ethers.parseEther("100"))).to.be
+                .reverted;
         });
     });
 });
