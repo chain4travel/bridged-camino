@@ -2,6 +2,7 @@
     "name": "bridged-camino",
     "description": "An ERC20-based token for bridged CAM on other chains",
     "version": "1.0.0",
+    "packageManager": "yarn@4.11.0",
     "scripts": {
         "test": "yarn hardhat test",
         "compile": "yarn hardhat compile",
