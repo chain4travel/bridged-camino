@@ -16,6 +16,9 @@ jobs:
               with:
                   node-version: "22"
 
+            - name: Enable Corepack
+              run: corepack enable
+
             - name: Install dependencies
               run: yarn install --frozen-lockfile
 
@@ -34,6 +37,9 @@ jobs:
               with:
                   node-version: "22"
 
+            - name: Enable Corepack
+              run: corepack enable
+
             - name: Install dependencies
               run: yarn install --frozen-lockfile
 
@@ -51,6 +57,9 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: "22"
+
+            - name: Enable Corepack
+              run: corepack enable
 
             - name: Install dependencies
               run: yarn install --frozen-lockfile
@@ -80,6 +89,9 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: "22"
+
+            - name: Enable Corepack
+              run: corepack enable
 
             - name: Install dependencies
               run: yarn install --frozen-lockfile
