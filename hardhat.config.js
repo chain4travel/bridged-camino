@@ -26,16 +26,40 @@ module.exports = {
         },
         columbus: {
             url: vars.get("COLUMBUS_URL", "https://columbus.camino.network/ext/bc/C/rpc"),
-            accounts: vars.has("COLUMBUS_DEPLOYER_PRIVATE_KEY") ? [vars.get("COLUMBUS_DEPLOYER_PRIVATE_KEY")] : [],
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 501,
         },
         camino: {
             url: vars.get("CAMINO_URL", "https://api.camino.network/ext/bc/C/rpc"),
-            accounts: vars.has("CAMINO_DEPLOYER_PRIVATE_KEY") ? [vars.get("CAMINO_DEPLOYER_PRIVATE_KEY")] : [],
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 500,
         },
         amoy: {
             url: vars.get("AMOY_URL", "https://rpc-amoy.polygon.technology"),
-            accounts: vars.has("AMOY_DEPLOYER_PRIVATE_KEY") ? [vars.get("AMOY_DEPLOYER_PRIVATE_KEY")] : [],
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 80002,
         },
+        sepolia: {
+            url: process.env.SEPOLIA_RPC_URL || "https://sepolia.drpc.org",
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 11155111,
+        },
+        ethereum: {
+            url: process.env.ETHEREUM_RPC_URL || "https://eth.drpc.org",
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 1,
+        },
+        bscTestnet: {
+            url: process.env.BSC_TESTNET_RPC_URL || "https://bsc-testnet.drpc.org",
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 97,
+        },
+        bsc: {
+            url: process.env.BSC_RPC_URL || "https://bsc.drpc.org",
+            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            chainId: 56,
+        },
+
     },
     etherscan: {
         apiKey: {
