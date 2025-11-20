@@ -62,8 +62,8 @@ async function promptUser(question) {
     });
 }
 
-async function checkExistingDeployment(chainId) {
-    const deploymentPath = path.join(process.cwd(), "ignition", "deployments", `chain-${chainId}`);
+async function checkExistingDeployment(deploymentId) {
+    const deploymentPath = path.join(process.cwd(), "ignition", "deployments", deploymentId);
 
     if (fs.existsSync(deploymentPath)) {
         const deployedAddressesPath = path.join(deploymentPath, "deployed_addresses.json");
@@ -226,6 +226,7 @@ function displaySecurityChecklist() {
 camScope
     .task("deploy", "Deploy BridgedCaminoV1 token and MasterMinter contracts")
     .addOptionalParam("parameters", "Path to the parameters JSON file")
+    .addOptionalParam("deploymentId", "Set the id of the deployment")
     .addFlag("verify", "Verify the deployment on configured block explorer")
     .setAction(async (taskArgs, hre) => {
         const { ethers, network } = hre;
@@ -235,31 +236,36 @@ camScope
 
             const targetNetwork = network.name;
 
-            // Determine parameters file: use provided path or default to network-specific file
+            // Get network information
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+
+            // Determine deployment ID (defaults to chain-<chainId> if not provided)
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            // Determine parameters file: use provided path or default to deployment-specific file
             const parametersFile =
                 taskArgs.parameters ||
-                path.join(process.cwd(), "ignition", "modules", `${targetNetwork}Parameters.json`);
+                path.join(process.cwd(), "ignition", "modules", `${deploymentId}_parameters.json`);
 
             // Check if parameters file exists early
             if (!fs.existsSync(parametersFile)) {
                 throw new Error(
                     `Parameters file not found: ${parametersFile}\n` +
-                        `Please create a parameters file for network "${targetNetwork}" or specify a custom path using --parameters`,
+                        `Please create a parameters file for deployment "${deploymentId}" or specify a custom path using --parameters`,
                 );
             }
 
             info(`Target Network: ${targetNetwork}`);
+            info(`Chain ID: ${chainId}`);
+            info(`Deployment ID: ${deploymentId}`);
             info(`Parameters File: ${parametersFile}`);
 
             // Load parameters
             subheader("Loading Parameters");
             const params = loadParameters(parametersFile, ethers);
             success("Parameters loaded and validated");
-
-            // Get network information
-            const provider = ethers.provider;
-            const networkInfo = await provider.getNetwork();
-            const chainId = networkInfo.chainId;
 
             // Get deployer information
             const [deployer] = await ethers.getSigners();
@@ -273,7 +279,7 @@ camScope
 
             // Check for existing deployment
             subheader("Checking for Existing Deployments");
-            const existingDeployment = await checkExistingDeployment(chainId);
+            const existingDeployment = await checkExistingDeployment(deploymentId);
 
             if (existingDeployment.exists) {
                 log("");
@@ -284,7 +290,7 @@ camScope
                 log(`    rm -rf ${existingDeployment.path}`, colors.cyan);
                 log("  - If you want to resume a failed deployment, continue with 'yes'", colors.yellow);
             } else {
-                success("No existing deployment found for this chain. This will be a fresh deployment.");
+                success("No existing deployment found with this deployment ID. This will be a fresh deployment.");
             }
 
             // Display security checklist
@@ -313,6 +319,12 @@ camScope
                 parameters: parametersFile,
             };
 
+            // Add deployment ID if provided
+            if (taskArgs.deploymentId) {
+                ignitionArgs.deploymentId = taskArgs.deploymentId;
+                info(`Using deployment ID: ${taskArgs.deploymentId}`);
+            }
+
             // Add verify flag if provided
             if (taskArgs.verify) {
                 ignitionArgs.verify = true;
@@ -329,7 +341,7 @@ camScope
                 process.cwd(),
                 "ignition",
                 "deployments",
-                `chain-${chainId}`,
+                deploymentId,
                 "deployed_addresses.json",
             );
 
@@ -353,6 +365,7 @@ camScope
             subheader("Deployment Details");
             log(`  Network:        ${targetNetwork}`);
             log(`  Chain ID:       ${chainId}`);
+            log(`  Deployment ID:  ${deploymentId}`);
             log(`  Deployer:       ${deployerAddress}`);
             log(`  Block Number:   ${await provider.getBlockNumber()}`);
             log(`  Timestamp:      ${new Date().toISOString()}`);
@@ -377,7 +390,7 @@ camScope
             }
             info("To verify contracts on block explorer:");
             log(`\n  # Using Ignition`, colors.cyan);
-            log(`  yarn hardhat ignition verify chain-${chainId}`, colors.cyan);
+            log(`  yarn hardhat ignition verify ${deploymentId}`, colors.cyan);
             log(`\n  # Or verify individually`, colors.cyan);
             log(`  yarn hardhat verify --network ${targetNetwork} ${implAddress}`, colors.cyan);
             log(`  yarn hardhat verify --network ${targetNetwork} ${masterMinterAddress} \\`, colors.cyan);
@@ -402,13 +415,14 @@ camScope
                 process.cwd(),
                 "ignition",
                 "deployments",
-                `chain-${chainId}`,
+                deploymentId,
                 "deploy_task_summary.json",
             );
 
             const summary = {
                 network: targetNetwork,
                 chainId: Number(chainId),
+                deploymentId: deploymentId,
                 deployer: deployerAddress,
                 timestamp: new Date().toISOString(),
                 deploymentTime: `${deploymentTime}s`,
@@ -426,7 +440,7 @@ camScope
 
             header("Deployment Complete");
         } catch (err) {
-            error("\nDeployment failed!");
+            error("Deployment failed!");
             error(err.message);
 
             if (err.stack) {
