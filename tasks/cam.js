@@ -25,7 +25,7 @@ function getIndent(level = 0) {
     return " ".repeat(level * INDENT_SIZE);
 }
 
-function log(message, indent = 0, color = colors.reset) {
+function log(message = "", indent = 0, color = colors.reset) {
     const indentStr = getIndent(indent);
     console.log(`${indentStr}${color}${message}${colors.reset}`);
 }
@@ -132,6 +132,15 @@ async function loadDeployment(deploymentId, ethers) {
     return { proxyAddress, masterMinterAddress };
 }
 
+async function getAddressType(address, provider) {
+    try {
+        const code = await provider.getCode(address);
+        return code !== "0x" ? "Contract" : "EOA";
+    } catch (err) {
+        return "Unknown";
+    }
+}
+
 async function checkExistingDeployment(deploymentId) {
     const deploymentPath = path.join(process.cwd(), "ignition", "deployments", deploymentId);
 
@@ -144,7 +153,7 @@ async function checkExistingDeployment(deploymentId) {
 
             try {
                 const deployedAddresses = JSON.parse(fs.readFileSync(deployedAddressesPath, "utf8"));
-                log("", 0);
+                log();
                 log("Previously deployed contracts:", 1, colors.yellow);
                 for (const [contractName, address] of Object.entries(deployedAddresses)) {
                     log(`${contractName}: ${address}`, 2, colors.yellow);
@@ -247,21 +256,21 @@ function displayTokenConfiguration(params) {
 function displayRoleConfiguration(params) {
     subheader("Role Configuration");
 
-    log("", 0);
+    log();
     log("Initial Role Holders:", 1, colors.bright);
     log(`DEFAULT_ADMIN_ROLE: ${params.defaultAdmin}`, 2);
     log(`PAUSER_ROLE:        ${params.pauser}`, 2);
     log(`UPGRADER_ROLE:      ${params.upgrader}`, 2);
     log(`BLACKLISTER_ROLE:   ${params.blacklister}`, 2);
 
-    log("", 0);
+    log();
     log("Role Admins (can grant/revoke roles):", 1, colors.bright);
     log(`PAUSER_ROLE_ADMIN:      ${params.pauserRoleAdmin}`, 2);
     log(`UPGRADER_ROLE_ADMIN:    ${params.upgraderRoleAdmin}`, 2);
     log(`MINTER_ROLE_ADMIN:      <MasterMinter Contract> (auto-assigned)`, 2);
     log(`BLACKLISTER_ROLE_ADMIN: ${params.blacklisterRoleAdmin}`, 2);
 
-    log("", 0);
+    log();
     log("MasterMinter Configuration:", 1, colors.bright);
     log(`Owner: ${params.masterMinterOwner}`, 2);
 
@@ -277,7 +286,7 @@ function displayRoleConfiguration(params) {
         params.masterMinterOwner,
     ]);
 
-    log("", 0);
+    log();
     log(`Unique addresses used: ${uniqueAddresses.size}`, 1, colors.cyan);
 
     if (uniqueAddresses.size === 1) {
@@ -357,10 +366,10 @@ camScope
             const existingDeployment = await checkExistingDeployment(deploymentId);
 
             if (existingDeployment.exists) {
-                log("", 0);
+                log();
                 warning("An existing deployment was found for this network!", 0);
                 warning("Continuing will either resume or create a new deployment depending on Ignition's state.", 0);
-                log("", 0);
+                log();
                 log("Options:", 0, colors.yellow);
                 log("- If you want to redeploy, delete the deployment folder first:", 1, colors.yellow);
                 log(`rm -rf ${existingDeployment.path}`, 2, colors.cyan);
@@ -373,11 +382,11 @@ camScope
             displaySecurityChecklist();
 
             // Ask for confirmation
-            log("", 0);
+            log();
             const answer = await promptUser("Type 'yes' to proceed with deployment:");
 
             if (answer !== "yes") {
-                log("", 0);
+                log();
                 log("Deployment cancelled by user.", 0, colors.red);
                 process.exit(0);
             }
@@ -389,7 +398,7 @@ camScope
 
             info("Deploying contracts using Hardhat Ignition...", 0);
             info("This may take several minutes depending on network conditions.", 0);
-            log("", 0);
+            log();
 
             // Run ignition deploy via the CLI command
             const ignitionArgs = {
@@ -467,10 +476,10 @@ camScope
                 success("Contracts have been verified on the block explorer.", 0);
             }
             info("To verify contracts on block explorer:", 0);
-            log("", 0);
+            log();
             log("# Using Ignition", 1, colors.cyan);
             log(`yarn hardhat ignition verify ${deploymentId}`, 1, colors.cyan);
-            log("", 0);
+            log();
             log("# Or verify individually", 1, colors.cyan);
             log(`yarn hardhat verify --network ${targetNetwork} ${implAddress}`, 1, colors.cyan);
             log(`yarn hardhat verify --network ${targetNetwork} ${masterMinterAddress} \\`, 1, colors.cyan);
@@ -515,7 +524,7 @@ camScope
             };
 
             fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));
-            log("", 0);
+            log();
             success(`Deployment summary saved to: ${summaryPath}`, 0);
 
             header("Deployment Complete");
@@ -524,7 +533,7 @@ camScope
             error(err.message, 0);
 
             if (err.stack) {
-                log("", 0);
+                log();
                 log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
@@ -651,7 +660,7 @@ camScope
             subheader("Access Control Roles");
             for (const role of roles) {
                 const memberCount = await token.getRoleMemberCount(role.value);
-                log("", 0);
+                log();
                 log(`${role.name}:`, 1, colors.bright);
                 log(`Role Hash:  ${role.value}`, 2, colors.cyan);
                 log(`Members:    ${memberCount}`, 2);
@@ -659,13 +668,15 @@ camScope
                 if (memberCount > 0) {
                     for (let i = 0; i < memberCount; i++) {
                         const member = await token.getRoleMember(role.value, i);
-                        log(`[${i}] ${member}`, 3, colors.green);
+                        const addressType = await getAddressType(member, provider);
+                        const typeColor = addressType === "Contract" ? colors.magenta : colors.yellow;
+                        log(`[${i}] ${member} (${addressType})`, 3, colors.green + typeColor);
                     }
                 } else {
                     log(`(none)`, 3, colors.yellow);
                 }
 
-                log("", 0);
+                log();
             }
 
             // MasterMinter Information
@@ -696,23 +707,27 @@ camScope
                 warning("No minters configured", 0);
             } else {
                 log(`Total Minters: ${minterCount}`, 1, colors.bright);
-                log("", 0);
+                log();
 
                 for (let i = 0; i < minterCount; i++) {
                     const minter = await token.getRoleMember(MINTER_ROLE, i);
                     const allowance = await token.minterAllowance(minter);
-                    const isMinter = await token.isMinter(minter);
+                    const addressType = await getAddressType(minter, provider);
 
-                    log(`[${i}] ${minter}`, 1, colors.bright + colors.green);
-                    log(`Status:    ${isMinter ? "Active" : "Inactive"}`, 3, isMinter ? colors.green : colors.red);
-                    log(`Allowance: ${ethers.formatUnits(allowance, decimals)} ${symbol}`, 3);
+                    log(`[${i}] ${minter} (${addressType})`, 1, colors.bright + colors.green);
+
+                    if (allowance === 0n) {
+                        log(`Allowance: 0 ${symbol}`, 3, colors.red);
+                    } else {
+                        log(`Allowance: ${ethers.formatUnits(allowance, decimals)} ${symbol}`, 3);
+                    }
 
                     totalAllowance += allowance;
                 }
             }
 
-            log("", 0);
-            warning(`Total Allowance: ${ethers.formatUnits(totalAllowance, decimals)} ${symbol}`, 1, colors.bright);
+            log();
+            info(`Total Allowance: ${colors.bright} ${ethers.formatUnits(totalAllowance, decimals)} ${symbol}`, 1);
 
             // Try to enumerate controllers via events
             subheader("Controllers Information");
@@ -758,7 +773,11 @@ camScope
                 }
 
                 if (deploymentBlock > 0 && !taskArgs.fromBlock) {
-                    log(`Scanning from deployment block ${fromBlock} to ${toBlock}... (${toBlock - fromBlock} blocks)`, 1, colors.cyan);
+                    log(
+                        `Scanning from deployment block ${fromBlock} to ${toBlock}... (${toBlock - fromBlock} blocks)`,
+                        1,
+                        colors.cyan,
+                    );
                     info(`Deployment detected at block ${deploymentBlock}`, 1);
                 } else {
                     log(`Scanning from block ${fromBlock} to ${toBlock}...`, 1, colors.cyan);
@@ -777,8 +796,12 @@ camScope
 
                     // Query in chunks if needed
                     if (blockChunkSize > 0 && toBlock - fromBlock > blockChunkSize) {
-                        log(`Processing ${Math.ceil((toBlock - fromBlock) / blockChunkSize)} chunks...`, 1, colors.cyan);
-                        log("", 0);
+                        log(
+                            `Processing ${Math.ceil((toBlock - fromBlock) / blockChunkSize)} chunks...`,
+                            1,
+                            colors.cyan,
+                        );
+                        log();
 
                         for (let start = fromBlock; start <= toBlock; start += blockChunkSize) {
                             const end = Math.min(start + blockChunkSize - 1, toBlock);
@@ -792,7 +815,7 @@ camScope
                         }
 
                         log("✓ Completed chunked query", 1, colors.green);
-                        log("", 0);
+                        log();
                     } else {
                         // Query all at once
                         configuredEvents = await masterMinter.queryFilter(configuredFilter, fromBlock, toBlock);
@@ -814,19 +837,26 @@ camScope
 
                     log(`Found ${configuredEvents.length} ControllerConfigured events`, 1, colors.cyan);
                     log(`Found ${removedEvents.length} ControllerRemoved events`, 1, colors.cyan);
-                    log("", 0);
+                    log();
 
                     if (controllerMap.size === 0) {
                         warning("No active controllers found", 0);
                         info("This is normal if no controllers have been configured yet.", 0);
                     } else {
                         log(`Active Controllers: ${controllerMap.size}`, 1, colors.bright);
-                        log("", 0);
+                        log();
 
                         let index = 0;
                         for (const [controller, worker] of controllerMap) {
-                            log(`[${index}] Controller: ${controller}`, 1, colors.bright + colors.cyan);
-                            log(`Worker/Minter: ${worker}`, 3, colors.green);
+                            const controllerType = await getAddressType(controller, provider);
+                            const workerType = await getAddressType(worker, provider);
+
+                            log(
+                                `[${index}] Controller: ${controller} (${controllerType})`,
+                                1,
+                                colors.bright + colors.cyan,
+                            );
+                            log(`Worker/Minter: ${worker} (${workerType})`, 3, colors.green);
 
                             // Get worker's allowance if it's a minter
                             try {
@@ -848,12 +878,20 @@ camScope
                     error(`Could not enumerate controllers: ${e.message}`, 0);
 
                     if (e.message.includes("10000 blocks") || e.message.includes("block range")) {
-                        log("", 0);
+                        log();
                         warning("Your RPC provider has block range limits. Try one of these solutions:", 0);
                         log("1. Use --from-block to start from a recent block:", 1, colors.cyan);
-                        log(`yarn hardhat cam status --network ${network.name} --from-block ${toBlock - 10000}`, 2, colors.cyan);
+                        log(
+                            `yarn hardhat cam status --network ${network.name} --from-block ${toBlock - 10000}`,
+                            2,
+                            colors.cyan,
+                        );
                         log("2. Use a smaller chunk size:", 1, colors.cyan);
-                        log(`yarn hardhat cam status --network ${network.name} --block-chunk-size 2000`, 2, colors.cyan);
+                        log(
+                            `yarn hardhat cam status --network ${network.name} --block-chunk-size 2000`,
+                            2,
+                            colors.cyan,
+                        );
                         log("3. Skip event scanning:", 1, colors.cyan);
                         log(`yarn hardhat cam status --network ${network.name} --skip-events`, 2, colors.cyan);
                     }
@@ -869,13 +907,13 @@ camScope
             success(`Minters: ${minterCount}`, 0);
             success(`MasterMinter Owner: ${masterMinterOwner}`, 0);
 
-            log("", 0);
+            log();
         } catch (err) {
             error("Status check failed!", 0);
             error(err.message, 0);
 
             if (err.stack) {
-                log("", 0);
+                log();
                 log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
@@ -931,7 +969,7 @@ camScope
             success(`Signer is the MasterMinter owner`, 0);
 
             // Send transaction
-            log("", 0);
+            log();
             log("Sending transaction...", 0, colors.cyan);
             const tx = await masterMinter.configureController(taskArgs.controller, taskArgs.worker);
             info(`Transaction hash: ${tx.hash}`, 0);
@@ -944,13 +982,13 @@ camScope
             success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
             success(`Controller ${taskArgs.controller} configured with worker ${taskArgs.worker}`, 0);
 
-            log("", 0);
+            log();
         } catch (err) {
             error("Transaction failed!", 0);
             error(err.message, 0);
 
             if (err.stack) {
-                log("", 0);
+                log();
                 log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
@@ -1004,7 +1042,7 @@ camScope
             success(`Signer is the MasterMinter owner`, 0);
 
             // Send transaction
-            log("", 0);
+            log();
             log("Sending transaction...", 0, colors.cyan);
             const tx = await masterMinter.removeController(taskArgs.controller);
             info(`Transaction hash: ${tx.hash}`, 0);
@@ -1017,13 +1055,13 @@ camScope
             success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
             success(`Controller ${taskArgs.controller} removed`, 0);
 
-            log("", 0);
+            log();
         } catch (err) {
             error("Transaction failed!", 0);
             error(err.message, 0);
 
             if (err.stack) {
-                log("", 0);
+                log();
                 log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
@@ -1087,7 +1125,7 @@ camScope
             log(`New Allowance: ${ethers.formatUnits(allowanceWei, decimals)} ${symbol}`, 1, colors.cyan);
 
             // Send transaction
-            log("", 0);
+            log();
             log("Sending transaction...", 0, colors.cyan);
             const tx = await masterMinter.configureMinter(allowanceWei);
             info(`Transaction hash: ${tx.hash}`, 0);
@@ -1103,13 +1141,13 @@ camScope
                 0,
             );
 
-            log("", 0);
+            log();
         } catch (err) {
             error("Transaction failed!", 0);
             error(err.message, 0);
 
             if (err.stack) {
-                log("", 0);
+                log();
                 log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
@@ -1163,7 +1201,7 @@ camScope
             log(`Worker:       ${worker}`, 1, colors.cyan);
 
             // Send transaction
-            log("", 0);
+            log();
             log("Sending transaction...", 0, colors.cyan);
             const tx = await masterMinter.removeMinter();
             info(`Transaction hash: ${tx.hash}`, 0);
@@ -1176,13 +1214,13 @@ camScope
             success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
             success(`Minter ${worker} removed`, 0);
 
-            log("", 0);
+            log();
         } catch (err) {
             error("Transaction failed!", 0);
             error(err.message, 0);
 
             if (err.stack) {
-                log("", 0);
+                log();
                 log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
