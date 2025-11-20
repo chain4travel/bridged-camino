@@ -63,10 +63,7 @@ module.exports = {
 
     },
     etherscan: {
-        apiKey: {
-            columbus: "abc",
-            camino: "abc",
-        },
+        apiKey: process.env.ETHERSCAN_API_KEY,
         customChains: [
             {
                 network: "columbus",

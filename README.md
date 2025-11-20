@@ -8,8 +8,8 @@ EVM-compatible chains.
 The token should be named as follows:
 
 - Token name:
-    - `Bridged Camino (Third-Party Team)` if deployed and managed by a third-party
-      bridge/team.
+    - `Bridged Camino (Third-Party Team)` if deployed and managed by a
+      third-party bridge/team.
     - `Camino Token` if deployed and managed by Camino Network Foundation.
 - Token symbol:
     - If deployed and managed by a third-party bridge/team (not Camino Network
