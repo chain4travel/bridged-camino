@@ -1,14 +1,20 @@
 # Bridged Camino
 
-This repository contains the smart contracts for CAM ERC20 tokens on EVM-compatible chains.
+This repository contains the smart contracts for CAM ERC20 tokens on
+EVM-compatible chains.
 
 ## Naming
 
 The token should be named as follows:
 
-- Token name: `Bridged Camino (Third-Party Team)`
+- Token name:
+  - `Bridged Camino (Third-Party Team)` if deployed and managed by a third-party
+    bridge/team.
+  - `Camino Token` if deployed and managed by Camino Network Foundation.
 - Token symbol:
-    - If deployed and managed by a third-party bridge (not Camino Network Foundation): `CAM.c` (`.c` indicates it's a bridged token originating from the `Camino` chain)
+    - If deployed and managed by a third-party bridge/team (not Camino Network
+      Foundation): `CAM.c` (`.c` indicates it's a bridged token originating from
+      the `Camino` chain)
     - If deployed and managed by the Camino Network Foundation: `CAM`
 
 ## Fork this Repository
@@ -194,24 +200,26 @@ Done in 4.79s.
 
 ### Edit ignition module parameters for the deployment
 
-Update the parameters file `ignition/modules/bridgedCaminoParameters.json` with your
-information for symbol and addresses.
+Update the parameters file `ignition/modules/bridgedCaminoParameters.json` with
+your information for symbol and addresses.
 
 ### Set deployer private key
 
-You need to set a RPC URL and a deployer for your specific chain in the `hardhat.config.js`
-file.
+You need to set a RPC URL and a deployer for your specific chain in the
+`hardhat.config.js` file.
 
-For example, there are already options for the Amoy testnet of Polygon. To set the deployer
-private key you need to use the command below:
+For example, there are already options for the Amoy testnet of Polygon. To set
+the deployer private key you need to use the command below:
 
 ```
 yarn hardhat vars set AMOY_DEPLOYER_PRIVATE_KEY
 ```
 
-This will save the variable into the file `$HOME/.config/hardhat-nodejs/vars.json`.
+This will save the variable into the file
+`$HOME/.config/hardhat-nodejs/vars.json`.
 
-You can use the command below to see how to set variables and which are already set:
+You can use the command below to see how to set variables and which are already
+set:
 
 ```
 yarn hardhat vars setup
@@ -243,9 +251,9 @@ Done in 0.50s.
 
 ### Deploy the Contract
 
-You can deploy the contract to the selected network using the command below. Update
-`<network>` with your desired network that you have added to the `hardhat.config.js`
-file.
+You can deploy the contract to the selected network using the command below.
+Update `<network>` with your desired network that you have added to the
+`hardhat.config.js` file.
 
 ```
 yarn hardhat ignition deploy ignition/modules/BridgedCaminoV1.js --parameters ignition/modules/bridgedCaminoParameters.json --network <network>
@@ -254,7 +262,7 @@ yarn hardhat ignition deploy ignition/modules/BridgedCaminoV1.js --parameters ig
 Deployment artifacts will be saved to `ignition/deployments/chain-<chainID>`.
 
 > [!IMPORTANT]
->
+> 
 > **It is recommended to also push these artifacts to your repository.**
 
 <details>
