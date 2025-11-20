@@ -62,6 +62,108 @@ async function promptUser(question) {
     });
 }
 
+async function getPrivateKey(taskArgs) {
+    if (taskArgs.privateKey) {
+        return taskArgs.privateKey;
+    }
+
+    // Prompt for private key without echoing to terminal
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout,
+    });
+
+    return new Promise((resolve) => {
+        // Disable echo
+        const stdin = process.stdin;
+        if (stdin.isTTY) {
+            stdin.setRawMode(true);
+        }
+
+        process.stdout.write(`${colors.yellow}Enter private key (input hidden): ${colors.reset}`);
+
+        let privateKey = "";
+        let reading = true;
+
+        const onData = (char) => {
+            if (!reading) return;
+
+            const charStr = char.toString();
+
+            if (charStr === "\n" || charStr === "\r" || charStr === "\u0004") {
+                // Enter or Ctrl+D
+                reading = false;
+                if (stdin.isTTY) {
+                    stdin.setRawMode(false);
+                }
+                stdin.removeListener("data", onData);
+                rl.close();
+                process.stdout.write("\n");
+                resolve(privateKey.trim());
+            } else if (charStr === "\u0003") {
+                // Ctrl+C
+                reading = false;
+                if (stdin.isTTY) {
+                    stdin.setRawMode(false);
+                }
+                stdin.removeListener("data", onData);
+                rl.close();
+                process.stdout.write("\n");
+                error("Operation cancelled by user");
+                process.exit(1);
+            } else if (charStr === "\u007f" || charStr === "\b") {
+                // Backspace
+                if (privateKey.length > 0) {
+                    privateKey = privateKey.slice(0, -1);
+                }
+            } else if (charStr >= " " && charStr <= "~") {
+                // Printable characters
+                privateKey += charStr;
+            }
+        };
+
+        stdin.on("data", onData);
+    });
+}
+
+async function getSignerFromPrivateKey(privateKey, ethers) {
+    // Add 0x prefix if missing
+    if (!privateKey.startsWith("0x")) {
+        privateKey = "0x" + privateKey;
+    }
+
+    try {
+        const wallet = new ethers.Wallet(privateKey, ethers.provider);
+        return wallet;
+    } catch (err) {
+        throw new Error(`Invalid private key: ${err.message}`);
+    }
+}
+
+async function loadDeployment(deploymentId, ethers) {
+    const deployedAddressesPath = path.join(
+        process.cwd(),
+        "ignition",
+        "deployments",
+        deploymentId,
+        "deployed_addresses.json",
+    );
+
+    if (!fs.existsSync(deployedAddressesPath)) {
+        throw new Error(
+            `No deployment found for deployment ID: ${deploymentId}\n` + `Expected path: ${deployedAddressesPath}`,
+        );
+    }
+
+    const deployedAddresses = JSON.parse(fs.readFileSync(deployedAddressesPath, "utf8"));
+    const proxyAddress =
+        deployedAddresses["BridgedCaminoV1Module#BridgedCaminoV1Proxy"] ||
+        deployedAddresses["BridgedCaminoV1Module#BridgedCaminoV1"];
+    const masterMinterAddress = deployedAddresses["BridgedCaminoV1Module#MasterMinter"];
+
+    return { proxyAddress, masterMinterAddress };
+}
+
 async function checkExistingDeployment(deploymentId) {
     const deploymentPath = path.join(process.cwd(), "ignition", "deployments", deploymentId);
 
@@ -582,6 +684,8 @@ camScope
                 } else {
                     log(`      (none)`, colors.yellow);
                 }
+
+                log("");
             }
 
             // MasterMinter Information
@@ -748,7 +852,7 @@ camScope
                                         `      Allowance:     ${ethers.formatUnits(workerAllowance, decimals)} ${symbol}`,
                                     );
                                 } else {
-                                    warning(`      Worker is not an active minter`);
+                                    warning(`      Worker is not an active minter (configure minter not called?)`);
                                 }
                             } catch (e) {
                                 warning(`      Could not read worker status: ${e.message}`);
@@ -790,6 +894,304 @@ camScope
             log("");
         } catch (err) {
             error("Status check failed!");
+            error(err.message);
+
+            if (err.stack) {
+                log("\nStack trace:", colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("configure-controller", "Configure a controller and its worker/minter (MasterMinter owner only)")
+    .addParam("controller", "Controller address")
+    .addParam("worker", "Worker/minter address managed by the controller")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of MasterMinter owner (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Configure Controller");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`);
+            info(`Deployment ID: ${deploymentId}`);
+
+            // Load deployment
+            const { masterMinterAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const signerAddress = await signer.getAddress();
+
+            subheader("Transaction Details");
+            log(`  MasterMinter:   ${masterMinterAddress}`, colors.bright);
+            log(`  Signer:         ${signerAddress}`, colors.bright);
+            log(`  Controller:     ${taskArgs.controller}`, colors.cyan);
+            log(`  Worker/Minter:  ${taskArgs.worker}`, colors.cyan);
+
+            // Get contract instance
+            const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress, signer);
+
+            // Check if signer is owner
+            const owner = await masterMinter.owner();
+            if (owner.toLowerCase() !== signerAddress.toLowerCase()) {
+                throw new Error(`Signer ${signerAddress} is not the MasterMinter owner.\nOwner is: ${owner}`);
+            }
+
+            success(`Signer is the MasterMinter owner`);
+
+            // Send transaction
+            log("\nSending transaction...", colors.cyan);
+            const tx = await masterMinter.configureController(taskArgs.controller, taskArgs.worker);
+            info(`Transaction hash: ${tx.hash}`);
+
+            log("Waiting for confirmation...", colors.cyan);
+            const receipt = await tx.wait();
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`);
+            success(`Gas used: ${receipt.gasUsed.toString()}`);
+            success(`Controller ${taskArgs.controller} configured with worker ${taskArgs.worker}`);
+
+            log("");
+        } catch (err) {
+            error("Transaction failed!");
+            error(err.message);
+
+            if (err.stack) {
+                log("\nStack trace:", colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("remove-controller", "Remove a controller (MasterMinter owner only)")
+    .addParam("controller", "Controller address to remove")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of MasterMinter owner (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Remove Controller");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`);
+            info(`Deployment ID: ${deploymentId}`);
+
+            // Load deployment
+            const { masterMinterAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const signerAddress = await signer.getAddress();
+
+            subheader("Transaction Details");
+            log(`  MasterMinter: ${masterMinterAddress}`, colors.bright);
+            log(`  Signer:       ${signerAddress}`, colors.bright);
+            log(`  Controller:   ${taskArgs.controller}`, colors.cyan);
+
+            // Get contract instance
+            const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress, signer);
+
+            // Check if signer is owner
+            const owner = await masterMinter.owner();
+            if (owner.toLowerCase() !== signerAddress.toLowerCase()) {
+                throw new Error(`Signer ${signerAddress} is not the MasterMinter owner.\nOwner is: ${owner}`);
+            }
+
+            success(`Signer is the MasterMinter owner`);
+
+            // Send transaction
+            log("\nSending transaction...", colors.cyan);
+            const tx = await masterMinter.removeController(taskArgs.controller);
+            info(`Transaction hash: ${tx.hash}`);
+
+            log("Waiting for confirmation...", colors.cyan);
+            const receipt = await tx.wait();
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`);
+            success(`Gas used: ${receipt.gasUsed.toString()}`);
+            success(`Controller ${taskArgs.controller} removed`);
+
+            log("");
+        } catch (err) {
+            error("Transaction failed!");
+            error(err.message);
+
+            if (err.stack) {
+                log("\nStack trace:", colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("configure-minter", "Configure minter allowance (Controller only)")
+    .addParam("allowance", "Minting allowance (in token units, e.g., 1000000 for 1M tokens)")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of controller (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Configure Minter Allowance");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`);
+            info(`Deployment ID: ${deploymentId}`);
+
+            // Load deployment
+            const { proxyAddress, masterMinterAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const controllerAddress = await signer.getAddress();
+
+            // Get token info for display
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress);
+            const symbol = await token.symbol();
+            const decimals = await token.decimals();
+
+            // Get contract instance
+            const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress, signer);
+
+            // Get controller's worker
+            const worker = await masterMinter.getWorker(controllerAddress);
+            if (worker === ethers.ZeroAddress) {
+                throw new Error(
+                    `Address ${controllerAddress} is not a configured controller.\n` +
+                        `Controllers must be configured by the MasterMinter owner first.`,
+                );
+            }
+
+            // Parse allowance
+            const allowanceWei = ethers.parseUnits(taskArgs.allowance, decimals);
+
+            subheader("Transaction Details");
+            log(`  MasterMinter: ${masterMinterAddress}`, colors.bright);
+            log(`  Controller:   ${controllerAddress}`, colors.bright);
+            log(`  Worker:       ${worker}`, colors.cyan);
+            log(`  New Allowance: ${ethers.formatUnits(allowanceWei, decimals)} ${symbol}`, colors.cyan);
+
+            // Send transaction
+            log("\nSending transaction...", colors.cyan);
+            const tx = await masterMinter.configureMinter(allowanceWei);
+            info(`Transaction hash: ${tx.hash}`);
+
+            log("Waiting for confirmation...", colors.cyan);
+            const receipt = await tx.wait();
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`);
+            success(`Gas used: ${receipt.gasUsed.toString()}`);
+            success(
+                `Minter ${worker} configured with allowance: ${ethers.formatUnits(allowanceWei, decimals)} ${symbol}`,
+            );
+
+            log("");
+        } catch (err) {
+            error("Transaction failed!");
+            error(err.message);
+
+            if (err.stack) {
+                log("\nStack trace:", colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("remove-minter", "Remove controller's minter (Controller only)")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of controller (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Remove Minter");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`);
+            info(`Deployment ID: ${deploymentId}`);
+
+            // Load deployment
+            const { masterMinterAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const controllerAddress = await signer.getAddress();
+
+            // Get contract instance
+            const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress, signer);
+
+            // Get controller's worker
+            const worker = await masterMinter.getWorker(controllerAddress);
+            if (worker === ethers.ZeroAddress) {
+                throw new Error(
+                    `Address ${controllerAddress} is not a configured controller.\n` +
+                        `Controllers must be configured by the MasterMinter owner first.`,
+                );
+            }
+
+            subheader("Transaction Details");
+            log(`  MasterMinter: ${masterMinterAddress}`, colors.bright);
+            log(`  Controller:   ${controllerAddress}`, colors.bright);
+            log(`  Worker:       ${worker}`, colors.cyan);
+
+            // Send transaction
+            log("\nSending transaction...", colors.cyan);
+            const tx = await masterMinter.removeMinter();
+            info(`Transaction hash: ${tx.hash}`);
+
+            log("Waiting for confirmation...", colors.cyan);
+            const receipt = await tx.wait();
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`);
+            success(`Gas used: ${receipt.gasUsed.toString()}`);
+            success(`Minter ${worker} removed`);
+
+            log("");
+        } catch (err) {
+            error("Transaction failed!");
             error(err.message);
 
             if (err.stack) {
