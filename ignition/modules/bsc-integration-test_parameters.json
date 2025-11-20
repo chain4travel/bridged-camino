@@ -1,0 +1,15 @@
+{
+    "NOTE": "Parameters for BridgedCaminoV1Module. This deploys both the token and MasterMinter atomically. Using multisigs in production is recommended.",
+    "BridgedCaminoV1Module": {
+        "name": "CAM Integration Test Token",
+        "symbol": "CAMTEST",
+        "defaultAdmin": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+        "pauser": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+        "upgrader": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+        "blacklister": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+        "pauserRoleAdmin": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+        "upgraderRoleAdmin": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+        "blacklisterRoleAdmin": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+        "masterMinterOwner": "0x157ff6954EF2038eA07585E5F91D727719445fcc"
+    }
+}

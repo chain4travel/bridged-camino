@@ -1,0 +1,25 @@
+{
+  "network": "bsc",
+  "chainId": 56,
+  "deploymentId": "bsc-integration-test",
+  "deployer": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+  "timestamp": "2025-11-20T03:56:30.115Z",
+  "deploymentTime": "18.86s",
+  "contracts": {
+    "proxy": "0x3766D84e043d4672e788f0AeB17511Ac7A84a5Eb",
+    "implementation": "0xC5a7d2465752Ca9479D670f39cde9d4E65cf696B",
+    "masterMinter": "0xD1cf626E5191c2f49947da080fac79243821B670"
+  },
+  "parameters": {
+    "name": "CAM Integration Test Token",
+    "symbol": "CAMTEST",
+    "defaultAdmin": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+    "pauser": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+    "upgrader": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+    "blacklister": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+    "pauserRoleAdmin": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+    "upgraderRoleAdmin": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+    "blacklisterRoleAdmin": "0x157ff6954EF2038eA07585E5F91D727719445fcc",
+    "masterMinterOwner": "0x157ff6954EF2038eA07585E5F91D727719445fcc"
+  }
+}
