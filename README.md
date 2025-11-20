@@ -8,9 +8,9 @@ EVM-compatible chains.
 The token should be named as follows:
 
 - Token name:
-  - `Bridged Camino (Third-Party Team)` if deployed and managed by a third-party
-    bridge/team.
-  - `Camino Token` if deployed and managed by Camino Network Foundation.
+    - `Bridged Camino (Third-Party Team)` if deployed and managed by a third-party
+      bridge/team.
+    - `Camino Token` if deployed and managed by Camino Network Foundation.
 - Token symbol:
     - If deployed and managed by a third-party bridge/team (not Camino Network
       Foundation): `CAM.c` (`.c` indicates it's a bridged token originating from
@@ -262,7 +262,7 @@ yarn hardhat ignition deploy ignition/modules/BridgedCaminoV1.js --parameters ig
 Deployment artifacts will be saved to `ignition/deployments/chain-<chainID>`.
 
 > [!IMPORTANT]
-> 
+>
 > **It is recommended to also push these artifacts to your repository.**
 
 <details>
