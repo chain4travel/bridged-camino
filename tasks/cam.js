@@ -4,6 +4,7 @@ const camScope = scope("cam", "BridgedCamino token management tasks");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const { Password } = require("enquirer");
 
 // ANSI color codes for terminal output
 const colors = {
@@ -17,35 +18,45 @@ const colors = {
     magenta: "\x1b[35m",
 };
 
-function log(message, color = colors.reset) {
-    console.log(`${color}${message}${colors.reset}`);
+// Indentation configuration
+const INDENT_SIZE = 2; // Number of spaces per indent level
+
+function getIndent(level = 0) {
+    return " ".repeat(level * INDENT_SIZE);
+}
+
+function log(message, indent = 0, color = colors.reset) {
+    const indentStr = getIndent(indent);
+    console.log(`${indentStr}${color}${message}${colors.reset}`);
 }
 
 function header(message) {
-    log(`\n${"=".repeat(80)}`, colors.cyan);
-    log(message, colors.bright + colors.cyan);
-    log("=".repeat(80), colors.cyan);
+    log("", 0, colors.reset);
+    log("=".repeat(80), 0, colors.cyan);
+    log(message, 0, colors.bright + colors.cyan);
+    log("=".repeat(80), 0, colors.cyan);
 }
 
 function subheader(message) {
-    log(`\n${message}`, colors.bright + colors.blue);
-    log("-".repeat(80), colors.blue);
+    log("", 0, colors.reset);
+    log(message, 0, colors.bright + colors.blue);
+    log("-".repeat(80), 0, colors.blue);
 }
 
-function success(message) {
-    log(`✓ ${message}`, colors.green);
+function success(message, indent = 0) {
+    log(`✓ ${message}`, indent, colors.green);
 }
 
-function warning(message) {
-    log(`⚠ ${message}`, colors.yellow);
+function warning(message, indent = 0) {
+    log(`⚠ ${message}`, indent, colors.yellow);
 }
 
-function error(message) {
-    log(`✗ ${message}`, colors.red);
+function error(message, indent = 0) {
+    log(`✗ ${message}`, indent, colors.red);
 }
 
-function info(message) {
-    log(`ℹ ${message}`, colors.cyan);
+function info(message, indent = 0) {
+    log(`ℹ ${message}`, indent, colors.cyan);
 }
 
 async function promptUser(question) {
@@ -67,63 +78,20 @@ async function getPrivateKey(taskArgs) {
         return taskArgs.privateKey;
     }
 
-    // Prompt for private key without echoing to terminal
-    const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
+    // Prompt for private key using enquirer (properly hides input)
+    const prompt = new Password({
+        name: "privateKey",
+        message: "Enter private key",
     });
 
-    return new Promise((resolve) => {
-        // Disable echo
-        const stdin = process.stdin;
-        if (stdin.isTTY) {
-            stdin.setRawMode(true);
-        }
-
-        process.stdout.write(`${colors.yellow}Enter private key (input hidden): ${colors.reset}`);
-
-        let privateKey = "";
-        let reading = true;
-
-        const onData = (char) => {
-            if (!reading) return;
-
-            const charStr = char.toString();
-
-            if (charStr === "\n" || charStr === "\r" || charStr === "\u0004") {
-                // Enter or Ctrl+D
-                reading = false;
-                if (stdin.isTTY) {
-                    stdin.setRawMode(false);
-                }
-                stdin.removeListener("data", onData);
-                rl.close();
-                process.stdout.write("\n");
-                resolve(privateKey.trim());
-            } else if (charStr === "\u0003") {
-                // Ctrl+C
-                reading = false;
-                if (stdin.isTTY) {
-                    stdin.setRawMode(false);
-                }
-                stdin.removeListener("data", onData);
-                rl.close();
-                process.stdout.write("\n");
-                error("Operation cancelled by user");
-                process.exit(1);
-            } else if (charStr === "\u007f" || charStr === "\b") {
-                // Backspace
-                if (privateKey.length > 0) {
-                    privateKey = privateKey.slice(0, -1);
-                }
-            } else if (charStr >= " " && charStr <= "~") {
-                // Printable characters
-                privateKey += charStr;
-            }
-        };
-
-        stdin.on("data", onData);
-    });
+    try {
+        const privateKey = await prompt.run();
+        return privateKey.trim();
+    } catch (err) {
+        // User cancelled (Ctrl+C)
+        error("Operation cancelled by user", 0);
+        process.exit(1);
+    }
 }
 
 async function getSignerFromPrivateKey(privateKey, ethers) {
@@ -171,18 +139,19 @@ async function checkExistingDeployment(deploymentId) {
         const deployedAddressesPath = path.join(deploymentPath, "deployed_addresses.json");
 
         if (fs.existsSync(deployedAddressesPath)) {
-            warning("EXISTING DEPLOYMENT DETECTED!");
-            log(`  Deployment folder: ${deploymentPath}`, colors.yellow);
+            warning("EXISTING DEPLOYMENT DETECTED!", 0);
+            log(`Deployment folder: ${deploymentPath}`, 1, colors.yellow);
 
             try {
                 const deployedAddresses = JSON.parse(fs.readFileSync(deployedAddressesPath, "utf8"));
-                log("\n  Previously deployed contracts:", colors.yellow);
+                log("", 0);
+                log("Previously deployed contracts:", 1, colors.yellow);
                 for (const [contractName, address] of Object.entries(deployedAddresses)) {
-                    log(`    ${contractName}: ${address}`, colors.yellow);
+                    log(`${contractName}: ${address}`, 2, colors.yellow);
                 }
                 return { exists: true, addresses: deployedAddresses, path: deploymentPath };
             } catch (err) {
-                error(`  Error reading deployed addresses: ${err.message}`);
+                error(`Error reading deployed addresses: ${err.message}`, 1);
             }
         }
     }
@@ -206,7 +175,7 @@ function loadParameters(parametersFile, ethers) {
         throw new Error(`Parameters file not found: ${parametersPath}`);
     }
 
-    success(`Loading parameters from: ${parametersPath}`);
+    success(`Loading parameters from: ${parametersPath}`, 0);
 
     const parametersContent = fs.readFileSync(parametersPath, "utf8");
     const parameters = JSON.parse(parametersContent);
@@ -258,40 +227,43 @@ function loadParameters(parametersFile, ethers) {
 
 function displayNetworkInfo(networkName, chainId, deployer, balance, ethers) {
     subheader("Network Information");
-    log(`  Network Name:     ${networkName}`, colors.bright);
-    log(`  Chain ID:         ${chainId}`, colors.bright);
-    log(`  Deployer Address: ${deployer}`, colors.bright);
-    log(`  Deployer Balance: ${ethers.formatEther(balance)} ETH`, colors.bright);
+    log(`Network Name:     ${networkName}`, 1, colors.bright);
+    log(`Chain ID:         ${chainId}`, 1, colors.bright);
+    log(`Deployer Address: ${deployer}`, 1, colors.bright);
+    log(`Deployer Balance: ${ethers.formatEther(balance)} ETH`, 1, colors.bright);
 
     // Warn if balance is low
     if (balance < ethers.parseEther("0.01")) {
-        warning("  Low deployer balance! Deployment may fail due to insufficient gas.");
+        warning("Low deployer balance! Deployment may fail due to insufficient gas.", 1);
     }
 }
 
 function displayTokenConfiguration(params) {
     subheader("Token Configuration");
-    log(`  Name  : "${params.name}"`, colors.bright);
-    log(`  Symbol: "${params.symbol}"`, colors.bright);
+    log(`Name  : "${params.name}"`, 1, colors.bright);
+    log(`Symbol: "${params.symbol}"`, 1, colors.bright);
 }
 
 function displayRoleConfiguration(params) {
     subheader("Role Configuration");
 
-    log("\n  Initial Role Holders:", colors.bright);
-    log(`    DEFAULT_ADMIN_ROLE: ${params.defaultAdmin}`);
-    log(`    PAUSER_ROLE:        ${params.pauser}`);
-    log(`    UPGRADER_ROLE:      ${params.upgrader}`);
-    log(`    BLACKLISTER_ROLE:   ${params.blacklister}`);
+    log("", 0);
+    log("Initial Role Holders:", 1, colors.bright);
+    log(`DEFAULT_ADMIN_ROLE: ${params.defaultAdmin}`, 2);
+    log(`PAUSER_ROLE:        ${params.pauser}`, 2);
+    log(`UPGRADER_ROLE:      ${params.upgrader}`, 2);
+    log(`BLACKLISTER_ROLE:   ${params.blacklister}`, 2);
 
-    log("\n  Role Admins (can grant/revoke roles):", colors.bright);
-    log(`    PAUSER_ROLE_ADMIN:      ${params.pauserRoleAdmin}`);
-    log(`    UPGRADER_ROLE_ADMIN:    ${params.upgraderRoleAdmin}`);
-    log(`    MINTER_ROLE_ADMIN:      <MasterMinter Contract> (auto-assigned)`);
-    log(`    BLACKLISTER_ROLE_ADMIN: ${params.blacklisterRoleAdmin}`);
+    log("", 0);
+    log("Role Admins (can grant/revoke roles):", 1, colors.bright);
+    log(`PAUSER_ROLE_ADMIN:      ${params.pauserRoleAdmin}`, 2);
+    log(`UPGRADER_ROLE_ADMIN:    ${params.upgraderRoleAdmin}`, 2);
+    log(`MINTER_ROLE_ADMIN:      <MasterMinter Contract> (auto-assigned)`, 2);
+    log(`BLACKLISTER_ROLE_ADMIN: ${params.blacklisterRoleAdmin}`, 2);
 
-    log("\n  MasterMinter Configuration:", colors.bright);
-    log(`    Owner: ${params.masterMinterOwner}`);
+    log("", 0);
+    log("MasterMinter Configuration:", 1, colors.bright);
+    log(`Owner: ${params.masterMinterOwner}`, 2);
 
     // Check for duplicates and warn about security
     const uniqueAddresses = new Set([
@@ -305,24 +277,25 @@ function displayRoleConfiguration(params) {
         params.masterMinterOwner,
     ]);
 
-    log(`\n  Unique addresses used: ${uniqueAddresses.size}`, colors.cyan);
+    log("", 0);
+    log(`Unique addresses used: ${uniqueAddresses.size}`, 1, colors.cyan);
 
     if (uniqueAddresses.size === 1) {
-        warning("  All roles assigned to the same address!");
-        warning("  This is NOT recommended for production deployments.");
-        warning("  Consider using multisig wallets for different roles.");
+        warning("All roles assigned to the same address!", 1);
+        warning("This is NOT recommended for production deployments.", 1);
+        warning("Consider using multisig wallets for different roles.", 1);
     }
 }
 
 function displaySecurityChecklist() {
     subheader("Security Checklist");
-    warning("Please verify the following before proceeding:");
-    log("  □ All addresses are correct and controlled by the right parties");
-    log("  □ Using multisig wallets for critical roles in production");
-    log("  □ Parameters file has been reviewed and approved");
-    log("  □ Network and chain ID are correct");
-    log("  □ Deployer has sufficient balance for gas fees");
-    log("  □ You have backed up the private key/mnemonic");
+    warning("Please verify the following before proceeding:", 0);
+    log("□ All addresses are correct and controlled by the right parties", 1);
+    log("□ Using multisig wallets for critical roles in production", 1);
+    log("□ Parameters file has been reviewed and approved", 1);
+    log("□ Network and chain ID are correct", 1);
+    log("□ Deployer has sufficient balance for gas fees", 1);
+    log("□ You have backed up the private key/mnemonic", 1);
 }
 
 camScope
@@ -359,15 +332,15 @@ camScope
                 );
             }
 
-            info(`Target Network: ${targetNetwork}`);
-            info(`Chain ID: ${chainId}`);
-            info(`Deployment ID: ${deploymentId}`);
-            info(`Parameters File: ${parametersFile}`);
+            info(`Target Network: ${targetNetwork}`, 0);
+            info(`Chain ID: ${chainId}`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+            info(`Parameters File: ${parametersFile}`, 0);
 
             // Load parameters
             subheader("Loading Parameters");
             const params = loadParameters(parametersFile, ethers);
-            success("Parameters loaded and validated");
+            success("Parameters loaded and validated", 0);
 
             // Get deployer information
             const [deployer] = await ethers.getSigners();
@@ -384,26 +357,28 @@ camScope
             const existingDeployment = await checkExistingDeployment(deploymentId);
 
             if (existingDeployment.exists) {
-                log("");
-                warning("An existing deployment was found for this network!");
-                warning("Continuing will either resume or create a new deployment depending on Ignition's state.");
-                log("\nOptions:", colors.yellow);
-                log("  - If you want to redeploy, delete the deployment folder first:", colors.yellow);
-                log(`    rm -rf ${existingDeployment.path}`, colors.cyan);
-                log("  - If you want to resume a failed deployment, continue with 'yes'", colors.yellow);
+                log("", 0);
+                warning("An existing deployment was found for this network!", 0);
+                warning("Continuing will either resume or create a new deployment depending on Ignition's state.", 0);
+                log("", 0);
+                log("Options:", 0, colors.yellow);
+                log("- If you want to redeploy, delete the deployment folder first:", 1, colors.yellow);
+                log(`rm -rf ${existingDeployment.path}`, 2, colors.cyan);
+                log("- If you want to resume a failed deployment, continue with 'yes'", 1, colors.yellow);
             } else {
-                success("No existing deployment found with this deployment ID. This will be a fresh deployment.");
+                success("No existing deployment found with this deployment ID. This will be a fresh deployment.", 0);
             }
 
             // Display security checklist
             displaySecurityChecklist();
 
             // Ask for confirmation
-            log("");
+            log("", 0);
             const answer = await promptUser("Type 'yes' to proceed with deployment:");
 
             if (answer !== "yes") {
-                log("\nDeployment cancelled by user.", colors.red);
+                log("", 0);
+                log("Deployment cancelled by user.", 0, colors.red);
                 process.exit(0);
             }
 
@@ -412,8 +387,9 @@ camScope
 
             const startTime = Date.now();
 
-            info("Deploying contracts using Hardhat Ignition...");
-            info("This may take several minutes depending on network conditions.\n");
+            info("Deploying contracts using Hardhat Ignition...", 0);
+            info("This may take several minutes depending on network conditions.", 0);
+            log("", 0);
 
             // Run ignition deploy via the CLI command
             const ignitionArgs = {
@@ -424,13 +400,13 @@ camScope
             // Add deployment ID if provided
             if (taskArgs.deploymentId) {
                 ignitionArgs.deploymentId = taskArgs.deploymentId;
-                info(`Using deployment ID: ${taskArgs.deploymentId}`);
+                info(`Using deployment ID: ${taskArgs.deploymentId}`, 0);
             }
 
             // Add verify flag if provided
             if (taskArgs.verify) {
                 ignitionArgs.verify = true;
-                info("Verification on block explorer will be performed after deployment.");
+                info("Verification on block explorer will be performed after deployment.", 0);
             }
 
             await hre.run({ scope: "ignition", task: "deploy" }, ignitionArgs);
@@ -457,60 +433,62 @@ camScope
             // Display deployment summary
             header("Deployment Successful!");
 
-            success(`Deployment completed in ${deploymentTime} seconds`);
+            success(`Deployment completed in ${deploymentTime} seconds`, 0);
 
             subheader("Deployed Contracts");
-            log(`  BridgedCaminoV1 Token (Proxy):     ${proxyAddress}`, colors.bright + colors.green);
-            log(`  BridgedCaminoV1 Implementation:    ${implAddress}`, colors.cyan);
-            log(`  MasterMinter:                      ${masterMinterAddress}`, colors.cyan);
+            log(`BridgedCaminoV1 Token (Proxy):     ${proxyAddress}`, 1, colors.bright + colors.green);
+            log(`BridgedCaminoV1 Implementation:    ${implAddress}`, 1, colors.cyan);
+            log(`MasterMinter:                      ${masterMinterAddress}`, 1, colors.cyan);
 
             subheader("Deployment Details");
-            log(`  Network:        ${targetNetwork}`);
-            log(`  Chain ID:       ${chainId}`);
-            log(`  Deployment ID:  ${deploymentId}`);
-            log(`  Deployer:       ${deployerAddress}`);
-            log(`  Block Number:   ${await provider.getBlockNumber()}`);
-            log(`  Timestamp:      ${new Date().toISOString()}`);
+            log(`Network:        ${targetNetwork}`, 1);
+            log(`Chain ID:       ${chainId}`, 1);
+            log(`Deployment ID:  ${deploymentId}`, 1);
+            log(`Deployer:       ${deployerAddress}`, 1);
+            log(`Block Number:   ${await provider.getBlockNumber()}`, 1);
+            log(`Timestamp:      ${new Date().toISOString()}`, 1);
 
             subheader("Token Information");
-            log(`  Name:           ${params.name}`);
-            log(`  Symbol:         ${params.symbol}`);
-            log(`  Decimals:       18 (standard ERC20)`);
-            log(`  Initial Supply: 0 (minting required)`);
+            log(`Name:           ${params.name}`, 1);
+            log(`Symbol:         ${params.symbol}`, 1);
+            log(`Decimals:       18 (standard ERC20)`, 1);
+            log(`Initial Supply: 0 (minting required)`, 1);
 
             subheader("Role Configuration Summary");
-            log(`  DEFAULT_ADMIN:       ${params.defaultAdmin}`);
-            log(`  PAUSER:              ${params.pauser}`);
-            log(`  UPGRADER:            ${params.upgrader}`);
-            log(`  BLACKLISTER:         ${params.blacklister}`);
-            log(`  MINTER_ROLE_ADMIN:   ${masterMinterAddress} (MasterMinter)`);
-            log(`  MasterMinter Owner:  ${params.masterMinterOwner}`);
+            log(`DEFAULT_ADMIN:       ${params.defaultAdmin}`, 1);
+            log(`PAUSER:              ${params.pauser}`, 1);
+            log(`UPGRADER:            ${params.upgrader}`, 1);
+            log(`BLACKLISTER:         ${params.blacklister}`, 1);
+            log(`MINTER_ROLE_ADMIN:   ${masterMinterAddress} (MasterMinter)`, 1);
+            log(`MasterMinter Owner:  ${params.masterMinterOwner}`, 1);
 
             subheader("Verification");
             if (taskArgs.verify) {
-                success("Contracts have been verified on the block explorer.");
+                success("Contracts have been verified on the block explorer.", 0);
             }
-            info("To verify contracts on block explorer:");
-            log(`\n  # Using Ignition`, colors.cyan);
-            log(`  yarn hardhat ignition verify ${deploymentId}`, colors.cyan);
-            log(`\n  # Or verify individually`, colors.cyan);
-            log(`  yarn hardhat verify --network ${targetNetwork} ${implAddress}`, colors.cyan);
-            log(`  yarn hardhat verify --network ${targetNetwork} ${masterMinterAddress} \\`, colors.cyan);
-            log(`    "${ethers.ZeroAddress}" "${deployerAddress}"`, colors.cyan);
+            info("To verify contracts on block explorer:", 0);
+            log("", 0);
+            log("# Using Ignition", 1, colors.cyan);
+            log(`yarn hardhat ignition verify ${deploymentId}`, 1, colors.cyan);
+            log("", 0);
+            log("# Or verify individually", 1, colors.cyan);
+            log(`yarn hardhat verify --network ${targetNetwork} ${implAddress}`, 1, colors.cyan);
+            log(`yarn hardhat verify --network ${targetNetwork} ${masterMinterAddress} \\`, 1, colors.cyan);
+            log(`"${ethers.ZeroAddress}" "${deployerAddress}"`, 2, colors.cyan);
 
             subheader("Next Steps");
-            info("After deployment, you should:");
-            log("  1. Verify the contracts on the block explorer");
-            log("  2. Configure minters via MasterMinter.configureMinter()");
-            log("  3. Test minting functionality");
-            log("  4. Set up monitoring and alerts");
-            log("  5. Update documentation with deployed addresses");
+            info("After deployment, you should:", 0);
+            log("1. Verify the contracts on the block explorer", 1);
+            log("2. Configure minters via MasterMinter.configureMinter()", 1);
+            log("3. Test minting functionality", 1);
+            log("4. Set up monitoring and alerts", 1);
+            log("5. Update documentation with deployed addresses", 1);
 
             subheader("Important Notes");
-            warning("The deployer address has NO special privileges on the token after deployment.");
-            warning("All role management is controlled by the configured role admins.");
-            warning("MasterMinter ownership has been transferred to the specified masterMinterOwner.");
-            warning("Commit the ignition deployment folder to your version control system.");
+            warning("The deployer address has NO special privileges on the token after deployment.", 0);
+            warning("All role management is controlled by the configured role admins.", 0);
+            warning("MasterMinter ownership has been transferred to the specified masterMinterOwner.", 0);
+            warning("Commit the ignition deployment folder to your version control system.", 0);
 
             // Save deployment info to a summary file
             const summaryPath = path.join(
@@ -537,16 +515,17 @@ camScope
             };
 
             fs.writeFileSync(summaryPath, JSON.stringify(summary, null, 2));
-            log("");
-            success(`Deployment summary saved to: ${summaryPath}`);
+            log("", 0);
+            success(`Deployment summary saved to: ${summaryPath}`, 0);
 
             header("Deployment Complete");
         } catch (err) {
-            error("Deployment failed!");
-            error(err.message);
+            error("Deployment failed!", 0);
+            error(err.message, 0);
 
             if (err.stack) {
-                log("\nStack trace:", colors.red);
+                log("", 0);
+                log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
 
@@ -579,9 +558,9 @@ camScope
             // Determine deployment ID
             const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
 
-            info(`Network: ${network.name}`);
-            info(`Chain ID: ${chainId}`);
-            info(`Deployment ID: ${deploymentId}`);
+            info(`Network: ${network.name}`, 0);
+            info(`Chain ID: ${chainId}`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
 
             // Load deployment addresses
             const deployedAddressesPath = path.join(
@@ -608,9 +587,9 @@ camScope
 
             // Display contract addresses
             subheader("Deployed Contracts");
-            log(`  Token Proxy:        ${proxyAddress}`, colors.bright);
-            log(`  Implementation:     ${implAddress}`, colors.cyan);
-            log(`  MasterMinter:       ${masterMinterAddress}`, colors.cyan);
+            log(`Token Proxy:        ${proxyAddress}`, 1, colors.bright);
+            log(`Implementation:     ${implAddress}`, 1, colors.cyan);
+            log(`MasterMinter:       ${masterMinterAddress}`, 1, colors.cyan);
 
             // Verify contracts exist at these addresses
             subheader("Verifying Contract Deployment");
@@ -621,13 +600,13 @@ camScope
                 throw new Error(
                     `No contract found at Token Proxy address: ${proxyAddress}\n\n` +
                         `This usually means:\n` +
-                        `  1. The deployment was made to a different network\n` +
-                        `  2. You're querying an ephemeral network (hardhat) instead of persistent (localhost)\n` +
-                        `  3. The deployment ID doesn't match the current network\n\n` +
+                        `${getIndent(1)}1. The deployment was made to a different network\n` +
+                        `${getIndent(1)}2. You're querying an ephemeral network (hardhat) instead of persistent (localhost)\n` +
+                        `${getIndent(1)}3. The deployment ID doesn't match the current network\n\n` +
                         `Solutions:\n` +
-                        `  - If deployed to localhost, add: --network localhost\n` +
-                        `  - If deployed to a testnet/mainnet, specify: --network <network-name>\n` +
-                        `  - Check available deployments in: ignition/deployments/`,
+                        `${getIndent(1)}- If deployed to localhost, add: --network localhost\n` +
+                        `${getIndent(1)}- If deployed to a testnet/mainnet, specify: --network <network-name>\n` +
+                        `${getIndent(1)}- Check available deployments in: ignition/deployments/`,
                 );
             }
 
@@ -635,7 +614,7 @@ camScope
                 throw new Error(`No contract found at MasterMinter address: ${masterMinterAddress}`);
             }
 
-            success("Contracts verified on-chain");
+            success("Contracts verified on-chain", 0);
 
             // Get contract instances
             const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress);
@@ -649,11 +628,11 @@ camScope
             const totalSupply = await token.totalSupply();
             const isPaused = await token.paused();
 
-            log(`  Name:           ${name}`, colors.bright);
-            log(`  Symbol:         ${symbol}`, colors.bright);
-            log(`  Decimals:       ${decimals}`);
-            log(`  Total Supply:   ${ethers.formatUnits(totalSupply, decimals)} ${symbol}`);
-            log(`  Paused:         ${isPaused ? "YES" : "NO"}`, isPaused ? colors.red : colors.green);
+            log(`Name:           ${name}`, 1, colors.bright);
+            log(`Symbol:         ${symbol}`, 1, colors.bright);
+            log(`Decimals:       ${decimals}`, 1);
+            log(`Total Supply:   ${ethers.formatUnits(totalSupply, decimals)} ${symbol}`, 1);
+            log(`Paused:         ${isPaused ? "YES" : "NO"}`, 1, isPaused ? colors.red : colors.green);
 
             // Role definitions
             const roles = [
@@ -672,20 +651,21 @@ camScope
             subheader("Access Control Roles");
             for (const role of roles) {
                 const memberCount = await token.getRoleMemberCount(role.value);
-                log(`\n  ${role.name}:`, colors.bright);
-                log(`    Role Hash:  ${role.value}`, colors.cyan);
-                log(`    Members:    ${memberCount}`);
+                log("", 0);
+                log(`${role.name}:`, 1, colors.bright);
+                log(`Role Hash:  ${role.value}`, 2, colors.cyan);
+                log(`Members:    ${memberCount}`, 2);
 
                 if (memberCount > 0) {
                     for (let i = 0; i < memberCount; i++) {
                         const member = await token.getRoleMember(role.value, i);
-                        log(`      [${i}] ${member}`, colors.green);
+                        log(`[${i}] ${member}`, 3, colors.green);
                     }
                 } else {
-                    log(`      (none)`, colors.yellow);
+                    log(`(none)`, 3, colors.yellow);
                 }
 
-                log("");
+                log("", 0);
             }
 
             // MasterMinter Information
@@ -693,46 +673,53 @@ camScope
             const masterMinterOwner = await masterMinter.owner();
             const minterManagerAddress = await masterMinter.getMinterManager();
 
-            log(`  Contract:       ${masterMinterAddress}`, colors.bright);
-            log(`  Owner:          ${masterMinterOwner}`, colors.bright);
-            log(`  Minter Manager: ${minterManagerAddress}`, colors.cyan);
+            log(`Contract:       ${masterMinterAddress}`, 1, colors.bright);
+            log(`Owner:          ${masterMinterOwner}`, 1, colors.bright);
+            log(`Minter Manager: ${minterManagerAddress}`, 1, colors.cyan);
 
             // Check if owner is a contract (multisig, etc.)
             const ownerCode = await provider.getCode(masterMinterOwner);
             const isOwnerContract = ownerCode !== "0x";
             if (isOwnerContract) {
-                info(`  Owner is a contract (likely a multisig or governance contract)`);
+                info(`Owner is a contract (likely a multisig or governance contract)`, 1);
             } else {
-                warning(`  Owner is an EOA (externally owned account)`);
+                warning(`Owner is an EOA (externally owned account)`, 1);
             }
 
             // Minters Information
             subheader("Minters and Allowances");
             const MINTER_ROLE = await token.MINTER_ROLE();
             const minterCount = await token.getRoleMemberCount(MINTER_ROLE);
+            let totalAllowance = 0n;
 
             if (minterCount === 0) {
-                warning("No minters configured");
+                warning("No minters configured", 0);
             } else {
-                log(`  Total Minters: ${minterCount}\n`, colors.bright);
+                log(`Total Minters: ${minterCount}`, 1, colors.bright);
+                log("", 0);
 
                 for (let i = 0; i < minterCount; i++) {
                     const minter = await token.getRoleMember(MINTER_ROLE, i);
                     const allowance = await token.minterAllowance(minter);
                     const isMinter = await token.isMinter(minter);
 
-                    log(`  [${i}] ${minter}`, colors.bright + colors.green);
-                    log(`      Status:    ${isMinter ? "Active" : "Inactive"}`, isMinter ? colors.green : colors.red);
-                    log(`      Allowance: ${ethers.formatUnits(allowance, decimals)} ${symbol}`);
+                    log(`[${i}] ${minter}`, 1, colors.bright + colors.green);
+                    log(`Status:    ${isMinter ? "Active" : "Inactive"}`, 3, isMinter ? colors.green : colors.red);
+                    log(`Allowance: ${ethers.formatUnits(allowance, decimals)} ${symbol}`, 3);
+
+                    totalAllowance += allowance;
                 }
             }
+
+            log("", 0);
+            warning(`Total Allowance: ${ethers.formatUnits(totalAllowance, decimals)} ${symbol}`, 1, colors.bright);
 
             // Try to enumerate controllers via events
             subheader("Controllers Information");
 
             if (taskArgs.skipEvents) {
-                warning("Event scanning skipped (--skip-events flag set)");
-                info("Controllers cannot be enumerated without event scanning.");
+                warning("Event scanning skipped (--skip-events flag set)", 0);
+                info("Controllers cannot be enumerated without event scanning.", 0);
             } else {
                 // Determine deployment block from journal
                 let deploymentBlock = 0;
@@ -771,17 +758,14 @@ camScope
                 }
 
                 if (deploymentBlock > 0 && !taskArgs.fromBlock) {
-                    log(
-                        `  Scanning from deployment block ${fromBlock} to ${toBlock}... (${toBlock - fromBlock} blocks)`,
-                        colors.cyan,
-                    );
-                    info(`  Deployment detected at block ${deploymentBlock}`);
+                    log(`Scanning from deployment block ${fromBlock} to ${toBlock}... (${toBlock - fromBlock} blocks)`, 1, colors.cyan);
+                    info(`Deployment detected at block ${deploymentBlock}`, 1);
                 } else {
-                    log(`  Scanning from block ${fromBlock} to ${toBlock}...`, colors.cyan);
+                    log(`Scanning from block ${fromBlock} to ${toBlock}...`, 1, colors.cyan);
                 }
 
                 if (blockChunkSize > 0 && toBlock - fromBlock > blockChunkSize) {
-                    info(`  Large range detected. Will query in chunks of ${blockChunkSize} blocks.`);
+                    info(`Large range detected. Will query in chunks of ${blockChunkSize} blocks.`, 1);
                 }
 
                 try {
@@ -793,14 +777,12 @@ camScope
 
                     // Query in chunks if needed
                     if (blockChunkSize > 0 && toBlock - fromBlock > blockChunkSize) {
-                        log(
-                            `  Processing ${Math.ceil((toBlock - fromBlock) / blockChunkSize)} chunks...\n`,
-                            colors.cyan,
-                        );
+                        log(`Processing ${Math.ceil((toBlock - fromBlock) / blockChunkSize)} chunks...`, 1, colors.cyan);
+                        log("", 0);
 
                         for (let start = fromBlock; start <= toBlock; start += blockChunkSize) {
                             const end = Math.min(start + blockChunkSize - 1, toBlock);
-                            log(`    Querying blocks ${start} to ${end}...`, colors.cyan);
+                            log(`Querying blocks ${start} to ${end}...`, 2, colors.cyan);
 
                             const configuredChunk = await masterMinter.queryFilter(configuredFilter, start, end);
                             const removedChunk = await masterMinter.queryFilter(removedFilter, start, end);
@@ -809,7 +791,8 @@ camScope
                             removedEvents = removedEvents.concat(removedChunk);
                         }
 
-                        log(`  ✓ Completed chunked query\n`, colors.green);
+                        log("✓ Completed chunked query", 1, colors.green);
+                        log("", 0);
                     } else {
                         // Query all at once
                         configuredEvents = await masterMinter.queryFilter(configuredFilter, fromBlock, toBlock);
@@ -829,75 +812,71 @@ camScope
                         controllerMap.delete(event.args.controller);
                     }
 
-                    log(`  Found ${configuredEvents.length} ControllerConfigured events`, colors.cyan);
-                    log(`  Found ${removedEvents.length} ControllerRemoved events\n`, colors.cyan);
+                    log(`Found ${configuredEvents.length} ControllerConfigured events`, 1, colors.cyan);
+                    log(`Found ${removedEvents.length} ControllerRemoved events`, 1, colors.cyan);
+                    log("", 0);
 
                     if (controllerMap.size === 0) {
-                        warning("No active controllers found");
-                        info("This is normal if no controllers have been configured yet.");
+                        warning("No active controllers found", 0);
+                        info("This is normal if no controllers have been configured yet.", 0);
                     } else {
-                        log(`  Active Controllers: ${controllerMap.size}\n`, colors.bright);
+                        log(`Active Controllers: ${controllerMap.size}`, 1, colors.bright);
+                        log("", 0);
 
                         let index = 0;
                         for (const [controller, worker] of controllerMap) {
-                            log(`  [${index}] Controller: ${controller}`, colors.bright + colors.cyan);
-                            log(`      Worker/Minter: ${worker}`, colors.green);
+                            log(`[${index}] Controller: ${controller}`, 1, colors.bright + colors.cyan);
+                            log(`Worker/Minter: ${worker}`, 3, colors.green);
 
                             // Get worker's allowance if it's a minter
                             try {
                                 const workerIsMinter = await token.isMinter(worker);
                                 if (workerIsMinter) {
                                     const workerAllowance = await token.minterAllowance(worker);
-                                    log(
-                                        `      Allowance:     ${ethers.formatUnits(workerAllowance, decimals)} ${symbol}`,
-                                    );
+                                    log(`Allowance:     ${ethers.formatUnits(workerAllowance, decimals)} ${symbol}`, 3);
                                 } else {
-                                    warning(`      Worker is not an active minter (configure minter not called?)`);
+                                    warning(`Worker is not an active minter (configure minter not called?)`, 3);
                                 }
                             } catch (e) {
-                                warning(`      Could not read worker status: ${e.message}`);
+                                warning(`Could not read worker status: ${e.message}`, 3);
                             }
 
                             index++;
                         }
                     }
                 } catch (e) {
-                    error(`Could not enumerate controllers: ${e.message}`);
+                    error(`Could not enumerate controllers: ${e.message}`, 0);
 
                     if (e.message.includes("10000 blocks") || e.message.includes("block range")) {
-                        warning("\nYour RPC provider has block range limits. Try one of these solutions:");
-                        log("  1. Use --from-block to start from a recent block:", colors.cyan);
-                        log(
-                            `     yarn hardhat cam status --network ${network.name} --from-block ${toBlock - 10000}`,
-                            colors.cyan,
-                        );
-                        log("  2. Use a smaller chunk size:", colors.cyan);
-                        log(
-                            `     yarn hardhat cam status --network ${network.name} --block-chunk-size 2000`,
-                            colors.cyan,
-                        );
-                        log("  3. Skip event scanning:", colors.cyan);
-                        log(`     yarn hardhat cam status --network ${network.name} --skip-events`, colors.cyan);
+                        log("", 0);
+                        warning("Your RPC provider has block range limits. Try one of these solutions:", 0);
+                        log("1. Use --from-block to start from a recent block:", 1, colors.cyan);
+                        log(`yarn hardhat cam status --network ${network.name} --from-block ${toBlock - 10000}`, 2, colors.cyan);
+                        log("2. Use a smaller chunk size:", 1, colors.cyan);
+                        log(`yarn hardhat cam status --network ${network.name} --block-chunk-size 2000`, 2, colors.cyan);
+                        log("3. Skip event scanning:", 1, colors.cyan);
+                        log(`yarn hardhat cam status --network ${network.name} --skip-events`, 2, colors.cyan);
                     }
                 }
             }
 
             // Summary
             header("Status Summary");
-            success(`Network: ${network.name} (Chain ID: ${chainId})`);
-            success(`Token: ${name} (${symbol})`);
-            success(`Total Supply: ${ethers.formatUnits(totalSupply, decimals)} ${symbol}`);
-            success(`Paused: ${isPaused ? "YES" : "NO"}`);
-            success(`Minters: ${minterCount}`);
-            success(`MasterMinter Owner: ${masterMinterOwner}`);
+            success(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            success(`Token: ${name} (${symbol})`, 0);
+            success(`Total Supply: ${ethers.formatUnits(totalSupply, decimals)} ${symbol}`, 0);
+            success(`Paused: ${isPaused ? "YES" : "NO"}`, 0);
+            success(`Minters: ${minterCount}`, 0);
+            success(`MasterMinter Owner: ${masterMinterOwner}`, 0);
 
-            log("");
+            log("", 0);
         } catch (err) {
-            error("Status check failed!");
-            error(err.message);
+            error("Status check failed!", 0);
+            error(err.message, 0);
 
             if (err.stack) {
-                log("\nStack trace:", colors.red);
+                log("", 0);
+                log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
 
@@ -923,8 +902,8 @@ camScope
             const chainId = networkInfo.chainId;
             const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
 
-            info(`Network: ${network.name} (Chain ID: ${chainId})`);
-            info(`Deployment ID: ${deploymentId}`);
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
 
             // Load deployment
             const { masterMinterAddress } = await loadDeployment(deploymentId, ethers);
@@ -935,10 +914,10 @@ camScope
             const signerAddress = await signer.getAddress();
 
             subheader("Transaction Details");
-            log(`  MasterMinter:   ${masterMinterAddress}`, colors.bright);
-            log(`  Signer:         ${signerAddress}`, colors.bright);
-            log(`  Controller:     ${taskArgs.controller}`, colors.cyan);
-            log(`  Worker/Minter:  ${taskArgs.worker}`, colors.cyan);
+            log(`MasterMinter:   ${masterMinterAddress}`, 1, colors.bright);
+            log(`Signer:         ${signerAddress}`, 1, colors.bright);
+            log(`Controller:     ${taskArgs.controller}`, 1, colors.cyan);
+            log(`Worker/Minter:  ${taskArgs.worker}`, 1, colors.cyan);
 
             // Get contract instance
             const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress, signer);
@@ -949,28 +928,30 @@ camScope
                 throw new Error(`Signer ${signerAddress} is not the MasterMinter owner.\nOwner is: ${owner}`);
             }
 
-            success(`Signer is the MasterMinter owner`);
+            success(`Signer is the MasterMinter owner`, 0);
 
             // Send transaction
-            log("\nSending transaction...", colors.cyan);
+            log("", 0);
+            log("Sending transaction...", 0, colors.cyan);
             const tx = await masterMinter.configureController(taskArgs.controller, taskArgs.worker);
-            info(`Transaction hash: ${tx.hash}`);
+            info(`Transaction hash: ${tx.hash}`, 0);
 
-            log("Waiting for confirmation...", colors.cyan);
+            log("Waiting for confirmation...", 0, colors.cyan);
             const receipt = await tx.wait();
 
             header("Transaction Confirmed");
-            success(`Block number: ${receipt.blockNumber}`);
-            success(`Gas used: ${receipt.gasUsed.toString()}`);
-            success(`Controller ${taskArgs.controller} configured with worker ${taskArgs.worker}`);
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Controller ${taskArgs.controller} configured with worker ${taskArgs.worker}`, 0);
 
-            log("");
+            log("", 0);
         } catch (err) {
-            error("Transaction failed!");
-            error(err.message);
+            error("Transaction failed!", 0);
+            error(err.message, 0);
 
             if (err.stack) {
-                log("\nStack trace:", colors.red);
+                log("", 0);
+                log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
 
@@ -995,8 +976,8 @@ camScope
             const chainId = networkInfo.chainId;
             const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
 
-            info(`Network: ${network.name} (Chain ID: ${chainId})`);
-            info(`Deployment ID: ${deploymentId}`);
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
 
             // Load deployment
             const { masterMinterAddress } = await loadDeployment(deploymentId, ethers);
@@ -1007,9 +988,9 @@ camScope
             const signerAddress = await signer.getAddress();
 
             subheader("Transaction Details");
-            log(`  MasterMinter: ${masterMinterAddress}`, colors.bright);
-            log(`  Signer:       ${signerAddress}`, colors.bright);
-            log(`  Controller:   ${taskArgs.controller}`, colors.cyan);
+            log(`MasterMinter: ${masterMinterAddress}`, 1, colors.bright);
+            log(`Signer:       ${signerAddress}`, 1, colors.bright);
+            log(`Controller:   ${taskArgs.controller}`, 1, colors.cyan);
 
             // Get contract instance
             const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress, signer);
@@ -1020,28 +1001,30 @@ camScope
                 throw new Error(`Signer ${signerAddress} is not the MasterMinter owner.\nOwner is: ${owner}`);
             }
 
-            success(`Signer is the MasterMinter owner`);
+            success(`Signer is the MasterMinter owner`, 0);
 
             // Send transaction
-            log("\nSending transaction...", colors.cyan);
+            log("", 0);
+            log("Sending transaction...", 0, colors.cyan);
             const tx = await masterMinter.removeController(taskArgs.controller);
-            info(`Transaction hash: ${tx.hash}`);
+            info(`Transaction hash: ${tx.hash}`, 0);
 
-            log("Waiting for confirmation...", colors.cyan);
+            log("Waiting for confirmation...", 0, colors.cyan);
             const receipt = await tx.wait();
 
             header("Transaction Confirmed");
-            success(`Block number: ${receipt.blockNumber}`);
-            success(`Gas used: ${receipt.gasUsed.toString()}`);
-            success(`Controller ${taskArgs.controller} removed`);
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Controller ${taskArgs.controller} removed`, 0);
 
-            log("");
+            log("", 0);
         } catch (err) {
-            error("Transaction failed!");
-            error(err.message);
+            error("Transaction failed!", 0);
+            error(err.message, 0);
 
             if (err.stack) {
-                log("\nStack trace:", colors.red);
+                log("", 0);
+                log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
 
@@ -1066,8 +1049,8 @@ camScope
             const chainId = networkInfo.chainId;
             const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
 
-            info(`Network: ${network.name} (Chain ID: ${chainId})`);
-            info(`Deployment ID: ${deploymentId}`);
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
 
             // Load deployment
             const { proxyAddress, masterMinterAddress } = await loadDeployment(deploymentId, ethers);
@@ -1098,33 +1081,36 @@ camScope
             const allowanceWei = ethers.parseUnits(taskArgs.allowance, decimals);
 
             subheader("Transaction Details");
-            log(`  MasterMinter: ${masterMinterAddress}`, colors.bright);
-            log(`  Controller:   ${controllerAddress}`, colors.bright);
-            log(`  Worker:       ${worker}`, colors.cyan);
-            log(`  New Allowance: ${ethers.formatUnits(allowanceWei, decimals)} ${symbol}`, colors.cyan);
+            log(`MasterMinter: ${masterMinterAddress}`, 1, colors.bright);
+            log(`Controller:   ${controllerAddress}`, 1, colors.bright);
+            log(`Worker:       ${worker}`, 1, colors.cyan);
+            log(`New Allowance: ${ethers.formatUnits(allowanceWei, decimals)} ${symbol}`, 1, colors.cyan);
 
             // Send transaction
-            log("\nSending transaction...", colors.cyan);
+            log("", 0);
+            log("Sending transaction...", 0, colors.cyan);
             const tx = await masterMinter.configureMinter(allowanceWei);
-            info(`Transaction hash: ${tx.hash}`);
+            info(`Transaction hash: ${tx.hash}`, 0);
 
-            log("Waiting for confirmation...", colors.cyan);
+            log("Waiting for confirmation...", 0, colors.cyan);
             const receipt = await tx.wait();
 
             header("Transaction Confirmed");
-            success(`Block number: ${receipt.blockNumber}`);
-            success(`Gas used: ${receipt.gasUsed.toString()}`);
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
             success(
                 `Minter ${worker} configured with allowance: ${ethers.formatUnits(allowanceWei, decimals)} ${symbol}`,
+                0,
             );
 
-            log("");
+            log("", 0);
         } catch (err) {
-            error("Transaction failed!");
-            error(err.message);
+            error("Transaction failed!", 0);
+            error(err.message, 0);
 
             if (err.stack) {
-                log("\nStack trace:", colors.red);
+                log("", 0);
+                log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
 
@@ -1148,8 +1134,8 @@ camScope
             const chainId = networkInfo.chainId;
             const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
 
-            info(`Network: ${network.name} (Chain ID: ${chainId})`);
-            info(`Deployment ID: ${deploymentId}`);
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
 
             // Load deployment
             const { masterMinterAddress } = await loadDeployment(deploymentId, ethers);
@@ -1172,30 +1158,32 @@ camScope
             }
 
             subheader("Transaction Details");
-            log(`  MasterMinter: ${masterMinterAddress}`, colors.bright);
-            log(`  Controller:   ${controllerAddress}`, colors.bright);
-            log(`  Worker:       ${worker}`, colors.cyan);
+            log(`MasterMinter: ${masterMinterAddress}`, 1, colors.bright);
+            log(`Controller:   ${controllerAddress}`, 1, colors.bright);
+            log(`Worker:       ${worker}`, 1, colors.cyan);
 
             // Send transaction
-            log("\nSending transaction...", colors.cyan);
+            log("", 0);
+            log("Sending transaction...", 0, colors.cyan);
             const tx = await masterMinter.removeMinter();
-            info(`Transaction hash: ${tx.hash}`);
+            info(`Transaction hash: ${tx.hash}`, 0);
 
-            log("Waiting for confirmation...", colors.cyan);
+            log("Waiting for confirmation...", 0, colors.cyan);
             const receipt = await tx.wait();
 
             header("Transaction Confirmed");
-            success(`Block number: ${receipt.blockNumber}`);
-            success(`Gas used: ${receipt.gasUsed.toString()}`);
-            success(`Minter ${worker} removed`);
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Minter ${worker} removed`, 0);
 
-            log("");
+            log("", 0);
         } catch (err) {
-            error("Transaction failed!");
-            error(err.message);
+            error("Transaction failed!", 0);
+            error(err.message, 0);
 
             if (err.stack) {
-                log("\nStack trace:", colors.red);
+                log("", 0);
+                log("Stack trace:", 0, colors.red);
                 console.error(err.stack);
             }
 
