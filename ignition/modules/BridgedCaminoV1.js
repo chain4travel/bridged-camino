@@ -95,14 +95,16 @@ module.exports = buildModule("BridgedCaminoV1Module", (m) => {
     // Step 4: Set the minter manager on MasterMinter now that the token is deployed
     // This connects the MasterMinter to the token
     // Deployer can call this because they are the temporary owner
-    const setMinterManagerCall = m.call(masterMinter, "setMinterManager", [bridgedCaminoV1Proxy], { id: "SetMinterManagerOnMasterMinter" });
+    const setMinterManagerCall = m.call(masterMinter, "setMinterManager", [bridgedCaminoV1Proxy], {
+        id: "SetMinterManagerOnMasterMinter",
+    });
 
     // Step 5: Transfer ownership of MasterMinter to the final owner (multisig)
     // After this, deployer has no control over MasterMinter
     // IMPORTANT: This must happen AFTER setMinterManager, so we add it as a dependency
     m.call(masterMinter, "transferOwnership", [masterMinterOwner], {
         id: "TransferMasterMinterOwnership",
-        after: [setMinterManagerCall]
+        after: [setMinterManagerCall],
     });
 
     return { bridgedCaminoV1Proxy, bridgedCaminoV1Impl, masterMinter };
