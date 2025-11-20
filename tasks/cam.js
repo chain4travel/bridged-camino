@@ -1229,4 +1229,134 @@ camScope
         }
     });
 
+camScope
+    .task("mint", "Mint tokens to a recipient (minter only)")
+    .addParam("to", "Recipient address")
+    .addParam("amount", "Amount of tokens to mint (in token units, e.g., 100.5)")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of minter (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Mint Tokens");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const minterAddress = await signer.getAddress();
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const decimals = await token.decimals();
+            const name = await token.name();
+
+            // Check if contract is paused
+            const isPaused = await token.paused();
+            if (isPaused) {
+                throw new Error("Token contract is paused. Minting is not allowed while paused.");
+            }
+
+            // Check if signer is a minter
+            const MINTER_ROLE = await token.MINTER_ROLE();
+            const isMinter = await token.hasRole(MINTER_ROLE, minterAddress);
+            if (!isMinter) {
+                throw new Error(
+                    `Address ${minterAddress} does not have MINTER_ROLE.\n` +
+                        `Only addresses with MINTER_ROLE can mint tokens.`,
+                );
+            }
+
+            // Get minter allowance
+            const allowance = await token.minterAllowance(minterAddress);
+            const allowanceFormatted = ethers.formatUnits(allowance, decimals);
+
+            // Parse amount
+            const amountInWei = ethers.parseUnits(taskArgs.amount, decimals);
+            const amountFormatted = ethers.formatUnits(amountInWei, decimals);
+
+            // Check if minter has enough allowance
+            if (allowance < amountInWei) {
+                throw new Error(
+                    `Insufficient minting allowance.\n` +
+                        `Requested: ${amountFormatted} ${symbol}\n` +
+                        `Available: ${allowanceFormatted} ${symbol}`,
+                );
+            }
+
+            // Get recipient address type
+            const recipientType = await getAddressType(taskArgs.to, provider);
+
+            subheader("Transaction Details");
+            log(`Token:          ${name} (${symbol})`, 1, colors.bright);
+            log(`Token Proxy:    ${proxyAddress}`, 1, colors.cyan);
+            log(`Minter:         ${minterAddress}`, 1, colors.bright);
+            log(`Recipient:      ${taskArgs.to} (${recipientType})`, 1, colors.cyan);
+            log(`Amount:         ${amountFormatted} ${symbol}`, 1, colors.green);
+            log(`Current Allowance: ${allowanceFormatted} ${symbol}`, 1, colors.yellow);
+            log(`New Allowance:     ${ethers.formatUnits(allowance - amountInWei, decimals)} ${symbol}`, 1, colors.yellow);
+
+            // Get current balances
+            const recipientBalanceBefore = await token.balanceOf(taskArgs.to);
+            const totalSupplyBefore = await token.totalSupply();
+
+            log();
+            info(`Recipient balance before: ${ethers.formatUnits(recipientBalanceBefore, decimals)} ${symbol}`, 0);
+            info(`Total supply before:      ${ethers.formatUnits(totalSupplyBefore, decimals)} ${symbol}`, 0);
+
+            // Send transaction
+            log();
+            log("Sending mint transaction...", 0, colors.cyan);
+            const tx = await token.mint(taskArgs.to, amountInWei);
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Get new balances
+            const recipientBalanceAfter = await token.balanceOf(taskArgs.to);
+            const totalSupplyAfter = await token.totalSupply();
+            const newAllowance = await token.minterAllowance(minterAddress);
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Minted ${amountFormatted} ${symbol} to ${taskArgs.to}`, 0);
+
+            log();
+            subheader("Updated Balances");
+            log(`Recipient balance: ${ethers.formatUnits(recipientBalanceAfter, decimals)} ${symbol}`, 1, colors.green);
+            log(`Total supply:      ${ethers.formatUnits(totalSupplyAfter, decimals)} ${symbol}`, 1, colors.green);
+            log(`Minter allowance:  ${ethers.formatUnits(newAllowance, decimals)} ${symbol}`, 1, colors.yellow);
+
+            log();
+        } catch (err) {
+            error("Mint transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
 module.exports = {};
