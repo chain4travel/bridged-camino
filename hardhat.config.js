@@ -1,6 +1,7 @@
 require("@nomicfoundation/hardhat-toolbox");
 require("hardhat-contract-sizer");
 require("solidity-docgen");
+require("./tasks/deploy");
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
