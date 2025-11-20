@@ -1,4 +1,6 @@
-const { task } = require("hardhat/config");
+const { scope } = require("hardhat/config");
+
+const camScope = scope("cam", "BridgedCamino token management tasks");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
@@ -221,7 +223,8 @@ function displaySecurityChecklist() {
     log("  □ You have backed up the private key/mnemonic");
 }
 
-task("deploy", "Deploy BridgedCaminoV1 token and MasterMinter contracts")
+camScope
+    .task("deploy", "Deploy BridgedCaminoV1 token and MasterMinter contracts")
     .addOptionalParam("parameters", "Path to the parameters JSON file")
     .addFlag("verify", "Verify the deployment on configured block explorer")
     .setAction(async (taskArgs, hre) => {
