@@ -452,4 +452,353 @@ camScope
         }
     });
 
+camScope
+    .task("status", "Display current state of deployed BridgedCaminoV1 token and MasterMinter")
+    .addOptionalParam("deploymentId", "Deployment ID to check status for")
+    .addOptionalParam("fromBlock", "Starting block for event scanning (default: deployment block)")
+    .addOptionalParam("toBlock", "Ending block for event scanning (default: latest)")
+    .addOptionalParam(
+        "blockChunkSize",
+        "Max blocks per query for event scanning (default: 5000, set to 0 to disable chunking)",
+        "5000",
+    )
+    .addFlag("skipEvents", "Skip event scanning for controllers (faster, less complete)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("BridgedCamino Token Status");
+
+            // Get network information
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+
+            // Determine deployment ID
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name}`);
+            info(`Chain ID: ${chainId}`);
+            info(`Deployment ID: ${deploymentId}`);
+
+            // Load deployment addresses
+            const deployedAddressesPath = path.join(
+                process.cwd(),
+                "ignition",
+                "deployments",
+                deploymentId,
+                "deployed_addresses.json",
+            );
+
+            if (!fs.existsSync(deployedAddressesPath)) {
+                throw new Error(
+                    `No deployment found for deployment ID: ${deploymentId}\n` +
+                        `Expected path: ${deployedAddressesPath}`,
+                );
+            }
+
+            const deployedAddresses = JSON.parse(fs.readFileSync(deployedAddressesPath, "utf8"));
+            const proxyAddress =
+                deployedAddresses["BridgedCaminoV1Module#BridgedCaminoV1Proxy"] ||
+                deployedAddresses["BridgedCaminoV1Module#BridgedCaminoV1"];
+            const implAddress = deployedAddresses["BridgedCaminoV1Module#BridgedCaminoV1Implementation"];
+            const masterMinterAddress = deployedAddresses["BridgedCaminoV1Module#MasterMinter"];
+
+            // Display contract addresses
+            subheader("Deployed Contracts");
+            log(`  Token Proxy:        ${proxyAddress}`, colors.bright);
+            log(`  Implementation:     ${implAddress}`, colors.cyan);
+            log(`  MasterMinter:       ${masterMinterAddress}`, colors.cyan);
+
+            // Verify contracts exist at these addresses
+            subheader("Verifying Contract Deployment");
+            const proxyCode = await provider.getCode(proxyAddress);
+            const masterMinterCode = await provider.getCode(masterMinterAddress);
+
+            if (proxyCode === "0x") {
+                throw new Error(
+                    `No contract found at Token Proxy address: ${proxyAddress}\n\n` +
+                        `This usually means:\n` +
+                        `  1. The deployment was made to a different network\n` +
+                        `  2. You're querying an ephemeral network (hardhat) instead of persistent (localhost)\n` +
+                        `  3. The deployment ID doesn't match the current network\n\n` +
+                        `Solutions:\n` +
+                        `  - If deployed to localhost, add: --network localhost\n` +
+                        `  - If deployed to a testnet/mainnet, specify: --network <network-name>\n` +
+                        `  - Check available deployments in: ignition/deployments/`,
+                );
+            }
+
+            if (masterMinterCode === "0x") {
+                throw new Error(`No contract found at MasterMinter address: ${masterMinterAddress}`);
+            }
+
+            success("Contracts verified on-chain");
+
+            // Get contract instances
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress);
+            const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress);
+
+            // Token Information
+            subheader("Token Information");
+            const name = await token.name();
+            const symbol = await token.symbol();
+            const decimals = await token.decimals();
+            const totalSupply = await token.totalSupply();
+            const isPaused = await token.paused();
+
+            log(`  Name:           ${name}`, colors.bright);
+            log(`  Symbol:         ${symbol}`, colors.bright);
+            log(`  Decimals:       ${decimals}`);
+            log(`  Total Supply:   ${ethers.formatUnits(totalSupply, decimals)} ${symbol}`);
+            log(`  Paused:         ${isPaused ? "YES" : "NO"}`, isPaused ? colors.red : colors.green);
+
+            // Role definitions
+            const roles = [
+                { name: "DEFAULT_ADMIN_ROLE", value: await token.DEFAULT_ADMIN_ROLE() },
+                { name: "PAUSER_ROLE", value: await token.PAUSER_ROLE() },
+                { name: "PAUSER_ROLE_ADMIN", value: await token.PAUSER_ROLE_ADMIN() },
+                { name: "MINTER_ROLE", value: await token.MINTER_ROLE() },
+                { name: "MINTER_ROLE_ADMIN", value: await token.MINTER_ROLE_ADMIN() },
+                { name: "UPGRADER_ROLE", value: await token.UPGRADER_ROLE() },
+                { name: "UPGRADER_ROLE_ADMIN", value: await token.UPGRADER_ROLE_ADMIN() },
+                { name: "BLACKLISTER_ROLE", value: await token.BLACKLISTER_ROLE() },
+                { name: "BLACKLISTER_ROLE_ADMIN", value: await token.BLACKLISTER_ROLE_ADMIN() },
+            ];
+
+            // Display Roles and Members
+            subheader("Access Control Roles");
+            for (const role of roles) {
+                const memberCount = await token.getRoleMemberCount(role.value);
+                log(`\n  ${role.name}:`, colors.bright);
+                log(`    Role Hash:  ${role.value}`, colors.cyan);
+                log(`    Members:    ${memberCount}`);
+
+                if (memberCount > 0) {
+                    for (let i = 0; i < memberCount; i++) {
+                        const member = await token.getRoleMember(role.value, i);
+                        log(`      [${i}] ${member}`, colors.green);
+                    }
+                } else {
+                    log(`      (none)`, colors.yellow);
+                }
+            }
+
+            // MasterMinter Information
+            subheader("MasterMinter Details");
+            const masterMinterOwner = await masterMinter.owner();
+            const minterManagerAddress = await masterMinter.getMinterManager();
+
+            log(`  Contract:       ${masterMinterAddress}`, colors.bright);
+            log(`  Owner:          ${masterMinterOwner}`, colors.bright);
+            log(`  Minter Manager: ${minterManagerAddress}`, colors.cyan);
+
+            // Check if owner is a contract (multisig, etc.)
+            const ownerCode = await provider.getCode(masterMinterOwner);
+            const isOwnerContract = ownerCode !== "0x";
+            if (isOwnerContract) {
+                info(`  Owner is a contract (likely a multisig or governance contract)`);
+            } else {
+                warning(`  Owner is an EOA (externally owned account)`);
+            }
+
+            // Minters Information
+            subheader("Minters and Allowances");
+            const MINTER_ROLE = await token.MINTER_ROLE();
+            const minterCount = await token.getRoleMemberCount(MINTER_ROLE);
+
+            if (minterCount === 0) {
+                warning("No minters configured");
+            } else {
+                log(`  Total Minters: ${minterCount}\n`, colors.bright);
+
+                for (let i = 0; i < minterCount; i++) {
+                    const minter = await token.getRoleMember(MINTER_ROLE, i);
+                    const allowance = await token.minterAllowance(minter);
+                    const isMinter = await token.isMinter(minter);
+
+                    log(`  [${i}] ${minter}`, colors.bright + colors.green);
+                    log(`      Status:    ${isMinter ? "Active" : "Inactive"}`, isMinter ? colors.green : colors.red);
+                    log(`      Allowance: ${ethers.formatUnits(allowance, decimals)} ${symbol}`);
+                }
+            }
+
+            // Try to enumerate controllers via events
+            subheader("Controllers Information");
+
+            if (taskArgs.skipEvents) {
+                warning("Event scanning skipped (--skip-events flag set)");
+                info("Controllers cannot be enumerated without event scanning.");
+            } else {
+                // Determine deployment block from journal
+                let deploymentBlock = 0;
+                try {
+                    const journalPath = path.join(
+                        process.cwd(),
+                        "ignition",
+                        "deployments",
+                        deploymentId,
+                        "journal.jsonl",
+                    );
+
+                    if (fs.existsSync(journalPath)) {
+                        const journalLines = fs.readFileSync(journalPath, "utf8").split("\n");
+                        for (const line of journalLines) {
+                            if (line.trim() && line.includes('"type":"TRANSACTION_CONFIRM"')) {
+                                const entry = JSON.parse(line);
+                                if (entry.receipt && entry.receipt.blockNumber) {
+                                    deploymentBlock = entry.receipt.blockNumber;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Ignore errors, fall back to 0
+                }
+
+                // Determine block range
+                let fromBlock = taskArgs.fromBlock ? parseInt(taskArgs.fromBlock) : deploymentBlock;
+                let toBlock = taskArgs.toBlock ? parseInt(taskArgs.toBlock) : "latest";
+                const blockChunkSize = parseInt(taskArgs.blockChunkSize);
+
+                if (toBlock === "latest") {
+                    toBlock = await provider.getBlockNumber();
+                }
+
+                if (deploymentBlock > 0 && !taskArgs.fromBlock) {
+                    log(
+                        `  Scanning from deployment block ${fromBlock} to ${toBlock}... (${toBlock - fromBlock} blocks)`,
+                        colors.cyan,
+                    );
+                    info(`  Deployment detected at block ${deploymentBlock}`);
+                } else {
+                    log(`  Scanning from block ${fromBlock} to ${toBlock}...`, colors.cyan);
+                }
+
+                if (blockChunkSize > 0 && toBlock - fromBlock > blockChunkSize) {
+                    info(`  Large range detected. Will query in chunks of ${blockChunkSize} blocks.`);
+                }
+
+                try {
+                    const configuredFilter = masterMinter.filters.ControllerConfigured();
+                    const removedFilter = masterMinter.filters.ControllerRemoved();
+
+                    let configuredEvents = [];
+                    let removedEvents = [];
+
+                    // Query in chunks if needed
+                    if (blockChunkSize > 0 && toBlock - fromBlock > blockChunkSize) {
+                        log(
+                            `  Processing ${Math.ceil((toBlock - fromBlock) / blockChunkSize)} chunks...\n`,
+                            colors.cyan,
+                        );
+
+                        for (let start = fromBlock; start <= toBlock; start += blockChunkSize) {
+                            const end = Math.min(start + blockChunkSize - 1, toBlock);
+                            log(`    Querying blocks ${start} to ${end}...`, colors.cyan);
+
+                            const configuredChunk = await masterMinter.queryFilter(configuredFilter, start, end);
+                            const removedChunk = await masterMinter.queryFilter(removedFilter, start, end);
+
+                            configuredEvents = configuredEvents.concat(configuredChunk);
+                            removedEvents = removedEvents.concat(removedChunk);
+                        }
+
+                        log(`  ✓ Completed chunked query\n`, colors.green);
+                    } else {
+                        // Query all at once
+                        configuredEvents = await masterMinter.queryFilter(configuredFilter, fromBlock, toBlock);
+                        removedEvents = await masterMinter.queryFilter(removedFilter, fromBlock, toBlock);
+                    }
+
+                    // Build a map of current controllers
+                    const controllerMap = new Map();
+
+                    // Add configured controllers
+                    for (const event of configuredEvents) {
+                        controllerMap.set(event.args.controller, event.args.worker);
+                    }
+
+                    // Remove removed controllers
+                    for (const event of removedEvents) {
+                        controllerMap.delete(event.args.controller);
+                    }
+
+                    log(`  Found ${configuredEvents.length} ControllerConfigured events`, colors.cyan);
+                    log(`  Found ${removedEvents.length} ControllerRemoved events\n`, colors.cyan);
+
+                    if (controllerMap.size === 0) {
+                        warning("No active controllers found");
+                        info("This is normal if no controllers have been configured yet.");
+                    } else {
+                        log(`  Active Controllers: ${controllerMap.size}\n`, colors.bright);
+
+                        let index = 0;
+                        for (const [controller, worker] of controllerMap) {
+                            log(`  [${index}] Controller: ${controller}`, colors.bright + colors.cyan);
+                            log(`      Worker/Minter: ${worker}`, colors.green);
+
+                            // Get worker's allowance if it's a minter
+                            try {
+                                const workerIsMinter = await token.isMinter(worker);
+                                if (workerIsMinter) {
+                                    const workerAllowance = await token.minterAllowance(worker);
+                                    log(
+                                        `      Allowance:     ${ethers.formatUnits(workerAllowance, decimals)} ${symbol}`,
+                                    );
+                                } else {
+                                    warning(`      Worker is not an active minter`);
+                                }
+                            } catch (e) {
+                                warning(`      Could not read worker status: ${e.message}`);
+                            }
+
+                            index++;
+                        }
+                    }
+                } catch (e) {
+                    error(`Could not enumerate controllers: ${e.message}`);
+
+                    if (e.message.includes("10000 blocks") || e.message.includes("block range")) {
+                        warning("\nYour RPC provider has block range limits. Try one of these solutions:");
+                        log("  1. Use --from-block to start from a recent block:", colors.cyan);
+                        log(
+                            `     yarn hardhat cam status --network ${network.name} --from-block ${toBlock - 10000}`,
+                            colors.cyan,
+                        );
+                        log("  2. Use a smaller chunk size:", colors.cyan);
+                        log(
+                            `     yarn hardhat cam status --network ${network.name} --block-chunk-size 2000`,
+                            colors.cyan,
+                        );
+                        log("  3. Skip event scanning:", colors.cyan);
+                        log(`     yarn hardhat cam status --network ${network.name} --skip-events`, colors.cyan);
+                    }
+                }
+            }
+
+            // Summary
+            header("Status Summary");
+            success(`Network: ${network.name} (Chain ID: ${chainId})`);
+            success(`Token: ${name} (${symbol})`);
+            success(`Total Supply: ${ethers.formatUnits(totalSupply, decimals)} ${symbol}`);
+            success(`Paused: ${isPaused ? "YES" : "NO"}`);
+            success(`Minters: ${minterCount}`);
+            success(`MasterMinter Owner: ${masterMinterOwner}`);
+
+            log("");
+        } catch (err) {
+            error("Status check failed!");
+            error(err.message);
+
+            if (err.stack) {
+                log("\nStack trace:", colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
 module.exports = {};
