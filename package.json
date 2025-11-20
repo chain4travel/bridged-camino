@@ -8,7 +8,8 @@
         "compile": "yarn hardhat compile",
         "format": "yarn prettier --write .",
         "docgen": "yarn hardhat docgen && yarn prettier --write docs/api",
-        "lint:prettier": "yarn prettier --check ."
+        "lint:prettier": "yarn prettier --check .",
+        "deploy": "yarn hardhat cam deploy"
     },
     "devDependencies": {
         "@nomicfoundation/hardhat-chai-matchers": "^2.1.2",
