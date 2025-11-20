@@ -17,37 +17,73 @@ const colors = {
     magenta: "\x1b[35m",
 };
 
+/**
+ * Log a message to the console with optional ANSI color formatting.
+ * @param {string} message - The text to print to the console.
+ * @param {string} [color=colors.reset] - ANSI escape code to prefix the message; defaults to no coloring.
+ */
 function log(message, color = colors.reset) {
     console.log(`${color}${message}${colors.reset}`);
 }
 
+/**
+ * Prints a cyan-colored header block with the provided message surrounded by divider lines.
+ * @param {string} message - The text to display inside the header block.
+ */
 function header(message) {
     log(`\n${"=".repeat(80)}`, colors.cyan);
     log(message, colors.bright + colors.cyan);
     log("=".repeat(80), colors.cyan);
 }
 
+/**
+ * Prints a formatted subheader message to the console.
+ *
+ * Displays the provided message in bright blue styling followed by an 80-character blue horizontal separator.
+ * @param {string} message - The text to display as the subheader.
+ */
 function subheader(message) {
     log(`\n${message}`, colors.bright + colors.blue);
     log("-".repeat(80), colors.blue);
 }
 
+/**
+ * Log a success message prefixed with a green check mark.
+ * @param {string} message - The message to display.
+ */
 function success(message) {
     log(`✓ ${message}`, colors.green);
 }
 
+/**
+ * Logs a warning message prefixed with a warning emoji and formatted in yellow.
+ * @param {string} message - The message to log.
+ */
 function warning(message) {
     log(`⚠ ${message}`, colors.yellow);
 }
 
+/**
+ * Logs an error message styled with a leading "✗" and red color.
+ * @param {string} message - The error message to display.
+ */
 function error(message) {
     log(`✗ ${message}`, colors.red);
 }
 
+/**
+ * Log an informational message with a cyan color and an "ℹ" prefix.
+ * @param {string} message - The text to display. 
+ */
 function info(message) {
     log(`ℹ ${message}`, colors.cyan);
 }
 
+/**
+ * Prompt the user with a question on stdin and return their trimmed, lowercase response.
+ * @param {string} question - The prompt text displayed to the user.
+ * @returns {string} The user's answer, trimmed of surrounding whitespace and converted to lowercase.
+ */
 async function promptUser(question) {
     const rl = readline.createInterface({
         input: process.stdin,
@@ -62,6 +98,13 @@ async function promptUser(question) {
     });
 }
 
+/**
+ * Check for a previous ignition deployment directory for the given deploymentId and, if present, read its deployed_addresses.json.
+ *
+ * @param {string} deploymentId - Identifier used to locate ignition/deployments/<deploymentId>.
+ * @returns {Promise<{exists: boolean, addresses?: Object, path?: string}>} An object where `exists` is `true` when a deployment folder was found; when `true`, `addresses` contains the parsed deployed_addresses.json and `path` is the deployment folder path.
+ * Side effects: logs a warning and the list of previously deployed contracts when deployed_addresses.json is present; logs an error if the file cannot be read.
+ */
 async function checkExistingDeployment(deploymentId) {
     const deploymentPath = path.join(process.cwd(), "ignition", "deployments", deploymentId);
 
@@ -88,6 +131,14 @@ async function checkExistingDeployment(deploymentId) {
     return { exists: false };
 }
 
+/**
+ * Ensures the given string is a valid non-zero Ethereum address for the named parameter.
+ * @param {string} address - The address to validate.
+ * @param {string} name - Human-readable name used in error messages to identify the parameter.
+ * @param {{ isAddress: function, ZeroAddress: string }} ethers - Ethers utilities used for validation.
+ * @throws {Error} If `address` is not a valid Ethereum address.
+ * @throws {Error} If `address` equals the zero address.
+ */
 function validateAddress(address, name, ethers) {
     if (!ethers.isAddress(address)) {
         throw new Error(`Invalid address for ${name}: ${address}`);
@@ -97,6 +148,14 @@ function validateAddress(address, name, ethers) {
     }
 }
 
+/**
+ * Load and validate the BridgedCaminoV1Module parameters from a JSON file.
+ *
+ * @param {string} parametersFile - Path to the JSON parameters file.
+ * @param {object} ethers - Ethers.js instance used for address validation.
+ * @returns {object} The validated `BridgedCaminoV1Module` parameters object.
+ * @throws {Error} If the file is missing, malformed, missing required keys, or any address validation fails.
+ */
 function loadParameters(parametersFile, ethers) {
     const parametersPath = path.resolve(parametersFile);
 
@@ -154,6 +213,14 @@ function loadParameters(parametersFile, ethers) {
     return moduleParams;
 }
 
+/**
+ * Display formatted network name, chain ID, deployer address, and deployer balance; warn if the balance is below 0.01 ETH.
+ *
+ * @param {string} networkName - Human-readable network name.
+ * @param {number|string} chainId - Numeric chain identifier for the target network.
+ * @param {string} deployer - Address of the account that will perform the deployment.
+ * @param {import("ethers").BigNumberish} balance - Deployer balance expressed in wei (ethers-compatible value); displayed as ETH.
+ */
 function displayNetworkInfo(networkName, chainId, deployer, balance, ethers) {
     subheader("Network Information");
     log(`  Network Name:     ${networkName}`, colors.bright);
@@ -167,12 +234,29 @@ function displayNetworkInfo(networkName, chainId, deployer, balance, ethers) {
     }
 }
 
+/**
+ * Display the token's name and symbol in a formatted "Token Configuration" console section.
+ * @param {{name: string, symbol: string}} params - Token configuration object with `name` and `symbol`.
+ */
 function displayTokenConfiguration(params) {
     subheader("Token Configuration");
     log(`  Name  : "${params.name}"`, colors.bright);
     log(`  Symbol: "${params.symbol}"`, colors.bright);
 }
 
+/**
+ * Display configured on-chain role assignments, role admin assignments, and MasterMinter owner, with a summary of unique addresses and security warnings when roles are concentrated.
+ *
+ * @param {Object} params - Token/module role parameters.
+ * @param {string} params.defaultAdmin - Address assigned DEFAULT_ADMIN_ROLE.
+ * @param {string} params.pauser - Address assigned PAUSER_ROLE.
+ * @param {string} params.upgrader - Address assigned UPGRADER_ROLE.
+ * @param {string} params.blacklister - Address assigned BLACKLISTER_ROLE.
+ * @param {string} params.pauserRoleAdmin - Address that will be admin for PAUSER_ROLE.
+ * @param {string} params.upgraderRoleAdmin - Address that will be admin for UPGRADER_ROLE.
+ * @param {string} params.blacklisterRoleAdmin - Address that will be admin for BLACKLISTER_ROLE.
+ * @param {string} params.masterMinterOwner - Address that will own the MasterMinter contract.
+ */
 function displayRoleConfiguration(params) {
     subheader("Role Configuration");
 
@@ -212,6 +296,9 @@ function displayRoleConfiguration(params) {
     }
 }
 
+/**
+ * Display a security checklist reminding operators to verify addresses, role ownership, parameter approval, network/chain ID, deployer balance, and key backups before proceeding with deployment.
+ */
 function displaySecurityChecklist() {
     subheader("Security Checklist");
     warning("Please verify the following before proceeding:");
