@@ -262,7 +262,7 @@ yarn hardhat ignition deploy ignition/modules/BridgedCaminoV1.js --parameters ig
 Deployment artifacts will be saved to `ignition/deployments/chain-<chainID>`.
 
 > [!IMPORTANT]
-> 
+>
 > **It is recommended to also push these artifacts to your repository.**
 
 <details>
