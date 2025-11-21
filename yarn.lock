@@ -2828,6 +2828,7 @@ __metadata:
     "@types/mocha": "npm:^10.0.10"
     "@types/node": "npm:^20.19.25"
     chai: "npm:^4.5.0"
+    enquirer: "npm:^2.4.1"
     ethers: "npm:^6.15.0"
     hardhat: "npm:^2.27.0"
     hardhat-contract-sizer: "npm:^2.10.1"
@@ -3489,7 +3490,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"enquirer@npm:^2.3.0":
+"enquirer@npm:^2.3.0, enquirer@npm:^2.4.1":
   version: 2.4.1
   resolution: "enquirer@npm:2.4.1"
   dependencies:
