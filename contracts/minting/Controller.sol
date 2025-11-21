@@ -107,7 +107,7 @@ contract Controller is Ownable {
      * @param controller The controller to be configured with a worker
      * @param worker The worker to be set for the controller
      */
-    function configureController(address controller, address worker) public onlyOwner {
+    function configureController(address controller, address worker) public virtual onlyOwner {
         if (controller == address(0)) {
             revert ControllerZeroAddress();
         }

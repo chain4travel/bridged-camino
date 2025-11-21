@@ -77,11 +77,13 @@ describe("MintController", function () {
             recipient,
         } = await loadFixture(deployMintControllerFixture);
 
-        // Configure controller1 with minter1
+        // Configure controller1 with minter1 and set a reasonable ceiling for testing
         await mintController.connect(owner).configureController(controller1.address, minter1.address);
+        await mintController.connect(owner).setControllerCeiling(controller1.address, ethers.parseEther("10000"));
 
-        // Configure controller2 with minter2
+        // Configure controller2 with minter2 and set a reasonable ceiling for testing
         await mintController.connect(owner).configureController(controller2.address, minter2.address);
+        await mintController.connect(owner).setControllerCeiling(controller2.address, ethers.parseEther("10000"));
 
         return {
             mintController,
@@ -167,7 +169,7 @@ describe("MintController", function () {
 
     describe("configureMinter", function () {
         it("Should allow controller to configure their minter with allowance", async function () {
-            const { mintController, minterManager, minterManagerAdmin, controller1, minter1 } = await loadFixture(
+            const { mintController, minterManager, controller1, minter1 } = await loadFixture(
                 mintControllerWithConfiguredControllersFixture,
             );
 
@@ -253,9 +255,12 @@ describe("MintController", function () {
         });
 
         it("Should revert on overflow", async function () {
-            const { mintController, controller1 } = await loadFixture(mintControllerWithConfiguredControllersFixture);
+            const { mintController, owner, controller1 } = await loadFixture(mintControllerWithConfiguredControllersFixture);
 
             const maxUint256 = ethers.MaxUint256;
+
+            // Set unlimited ceiling
+            await mintController.connect(owner).setControllerCeiling(controller1.address, ethers.MaxUint256);
             await mintController.connect(controller1).configureMinter(maxUint256);
 
             // Try to increment by 1, should overflow
@@ -355,10 +360,9 @@ describe("MintController", function () {
     describe("Multiple controllers managing same minter", function () {
         it("Should allow multiple controllers to manage the same minter independently", async function () {
             const { mintController, minterManager, owner, controller1, controller2, minter1 } =
-                await loadFixture(deployMintControllerFixture);
+                await loadFixture(mintControllerWithConfiguredControllersFixture);
 
-            // Configure both controllers to manage minter1
-            await mintController.connect(owner).configureController(controller1.address, minter1.address);
+            // Reconfigure both controllers to manage the same minter (minter1)
             await mintController.connect(owner).configureController(controller2.address, minter1.address);
 
             // Controller1 sets allowance to 1000
@@ -418,6 +422,40 @@ describe("MintController", function () {
     });
 
     describe("Controller Ceilings", function () {
+        describe("configureController with default ceiling", function () {
+            it("Should set ceiling to 0 when configuring new controller", async function () {
+                const { mintController, owner, otherAccount } = await loadFixture(deployMintControllerFixture);
+
+                const newController = otherAccount;
+                const newMinter = otherAccount;
+
+                // Configure controller should emit both events
+                await expect(mintController.connect(owner).configureController(newController.address, newMinter.address))
+                    .to.emit(mintController, "ControllerConfigured")
+                    .withArgs(newController.address, newMinter.address)
+                    .and.to.emit(mintController, "ControllerCeilingUpdated")
+                    .withArgs(newController.address, 0);
+
+                expect(await mintController.getControllerCeiling(newController.address)).to.equal(0);
+            });
+
+            it("Should not reset ceiling when reconfiguring existing controller", async function () {
+                const { mintController, owner, controller1, minter2 } = await loadFixture(
+                    mintControllerWithConfiguredControllersFixture,
+                );
+
+                // Set a custom ceiling
+                const ceiling = ethers.parseEther("5000");
+                await mintController.connect(owner).setControllerCeiling(controller1.address, ceiling);
+
+                // Reconfigure the same controller with a different minter
+                await mintController.connect(owner).configureController(controller1.address, minter2.address);
+
+                // Ceiling should remain unchanged
+                expect(await mintController.getControllerCeiling(controller1.address)).to.equal(ceiling);
+            });
+        });
+
         describe("setControllerCeiling", function () {
             it("Should allow owner to set controller ceiling", async function () {
                 const { mintController, owner, controller1 } = await loadFixture(
@@ -447,7 +485,20 @@ describe("MintController", function () {
                 expect(await mintController.getControllerCeiling(controller1.address)).to.equal(ceiling2);
             });
 
-            it("Should allow owner to set ceiling to 0 (unlimited)", async function () {
+            it("Should allow owner to set ceiling to 0 (zero-only, for disabler controllers)", async function () {
+                const { mintController, owner, controller1 } = await loadFixture(
+                    mintControllerWithConfiguredControllersFixture,
+                );
+
+                // Set ceiling to 0 (controller can only set allowance to 0)
+                await expect(mintController.connect(owner).setControllerCeiling(controller1.address, 0))
+                    .to.emit(mintController, "ControllerCeilingUpdated")
+                    .withArgs(controller1.address, 0);
+
+                expect(await mintController.getControllerCeiling(controller1.address)).to.equal(0);
+            });
+
+            it("Should allow owner to set ceiling to MaxUint256 (unlimited)", async function () {
                 const { mintController, owner, controller1 } = await loadFixture(
                     mintControllerWithConfiguredControllersFixture,
                 );
@@ -455,12 +506,12 @@ describe("MintController", function () {
                 // Set a ceiling first
                 await mintController.connect(owner).setControllerCeiling(controller1.address, ethers.parseEther("5000"));
 
-                // Remove ceiling by setting to 0
-                await expect(mintController.connect(owner).setControllerCeiling(controller1.address, 0))
+                // Remove ceiling by setting to MaxUint256
+                await expect(mintController.connect(owner).setControllerCeiling(controller1.address, ethers.MaxUint256))
                     .to.emit(mintController, "ControllerCeilingUpdated")
-                    .withArgs(controller1.address, 0);
+                    .withArgs(controller1.address, ethers.MaxUint256);
 
-                expect(await mintController.getControllerCeiling(controller1.address)).to.equal(0);
+                expect(await mintController.getControllerCeiling(controller1.address)).to.equal(ethers.MaxUint256);
             });
 
             it("Should revert if called by non-owner", async function () {
@@ -473,10 +524,14 @@ describe("MintController", function () {
         });
 
         describe("getControllerCeiling", function () {
-            it("Should return 0 for controller with no ceiling set", async function () {
-                const { mintController, controller1 } = await loadFixture(mintControllerWithConfiguredControllersFixture);
+            it("Should return 0 for newly configured controller (default ceiling)", async function () {
+                const { mintController, owner, otherAccount } = await loadFixture(deployMintControllerFixture);
 
-                expect(await mintController.getControllerCeiling(controller1.address)).to.equal(0);
+                // Configure a new controller
+                await mintController.connect(owner).configureController(otherAccount.address, otherAccount.address);
+
+                // Controllers default to ceiling of 0 when configured
+                expect(await mintController.getControllerCeiling(otherAccount.address)).to.equal(0);
             });
 
             it("Should return correct ceiling after it is set", async function () {
@@ -536,17 +591,39 @@ describe("MintController", function () {
                     .withArgs(allowance, ceiling);
             });
 
-            it("Should allow unlimited allowance when ceiling is 0", async function () {
-                const { mintController, minterManager, controller1, minter1 } = await loadFixture(
+            it("Should allow unlimited allowance when ceiling is set to MaxUint256", async function () {
+                const { mintController, minterManager, owner, controller1, minter1 } = await loadFixture(
                     mintControllerWithConfiguredControllersFixture,
                 );
 
                 const veryLargeAllowance = ethers.MaxUint256;
 
-                // No ceiling set (defaults to 0)
+                // Set ceiling to MaxUint256 (unlimited)
+                await mintController.connect(owner).setControllerCeiling(controller1.address, ethers.MaxUint256);
                 await mintController.connect(controller1).configureMinter(veryLargeAllowance);
 
                 expect(await minterManager.minterAllowance(minter1.address)).to.equal(veryLargeAllowance);
+            });
+
+            it("Should enforce default ceiling of 0 (controller can only disable)", async function () {
+                const { mintController, minterManager, owner, otherAccount } = await loadFixture(
+                    deployMintControllerFixture,
+                );
+
+                // Configure a new controller (defaults to ceiling of 0)
+                await mintController.connect(owner).configureController(otherAccount.address, otherAccount.address);
+
+                // Controllers default to ceiling of 0 (zero-only)
+                expect(await mintController.getControllerCeiling(otherAccount.address)).to.equal(0);
+
+                // Can configure allowance of 0
+                await mintController.connect(otherAccount).configureMinter(0);
+                expect(await minterManager.minterAllowance(otherAccount.address)).to.equal(0);
+
+                // Cannot configure any non-zero allowance
+                await expect(mintController.connect(otherAccount).configureMinter(1))
+                    .to.be.revertedWithCustomError(mintController, "AllowanceExceedsCeiling")
+                    .withArgs(1, 0);
             });
         });
 
@@ -605,18 +682,40 @@ describe("MintController", function () {
                     .withArgs(expectedNewAllowance, ceiling);
             });
 
-            it("Should allow unlimited increment when ceiling is 0", async function () {
-                const { mintController, minterManager, controller1, minter1 } = await loadFixture(
+            it("Should allow unlimited increment when ceiling is MaxUint256", async function () {
+                const { mintController, minterManager, owner, controller1, minter1 } = await loadFixture(
                     mintControllerWithConfiguredControllersFixture,
                 );
 
                 const initialAllowance = ethers.parseEther("1000");
                 const largeIncrement = ethers.parseEther("1000000");
 
+                // Set ceiling to MaxUint256 (unlimited)
+                await mintController.connect(owner).setControllerCeiling(controller1.address, ethers.MaxUint256);
                 await mintController.connect(controller1).configureMinter(initialAllowance);
                 await mintController.connect(controller1).incrementMinterAllowance(largeIncrement);
 
                 expect(await minterManager.minterAllowance(minter1.address)).to.equal(initialAllowance + largeIncrement);
+            });
+
+            it("Should prevent increment when ceiling is 0 (default zero-only controller)", async function () {
+                const { mintController, owner, otherAccount } = await loadFixture(
+                    deployMintControllerFixture,
+                );
+
+                // Configure a new controller (defaults to ceiling of 0)
+                await mintController.connect(owner).configureController(otherAccount.address, otherAccount.address);
+
+                // Controllers default to ceiling of 0 (zero-only)
+                expect(await mintController.getControllerCeiling(otherAccount.address)).to.equal(0);
+
+                // Configure with allowance 0
+                await mintController.connect(otherAccount).configureMinter(0);
+
+                // Cannot increment from 0 (would exceed ceiling of 0)
+                await expect(mintController.connect(otherAccount).incrementMinterAllowance(1))
+                    .to.be.revertedWithCustomError(mintController, "AllowanceExceedsCeiling")
+                    .withArgs(1, 0);
             });
         });
 
@@ -633,6 +732,30 @@ describe("MintController", function () {
                 await mintController.connect(owner).setControllerCeiling(controller1.address, ceiling);
                 await mintController.connect(controller1).configureMinter(initialAllowance);
                 await mintController.connect(controller1).decrementMinterAllowance(decrement);
+
+                expect(await minterManager.minterAllowance(minter1.address)).to.equal(initialAllowance - decrement);
+            });
+
+            it("Should allow zero-ceiling controller to decrement (useful for disabling)", async function () {
+                const { mintController, minterManager, owner } = await loadFixture(deployMintControllerFixture);
+
+                const [, , , controller1, disablerController, minter1] = await ethers.getSigners();
+
+                // Configure controller1 with a normal ceiling
+                await mintController.connect(owner).configureController(controller1.address, minter1.address);
+                await mintController.connect(owner).setControllerCeiling(controller1.address, ethers.parseEther("10000"));
+
+                // Configure with normal controller first
+                const initialAllowance = ethers.parseEther("5000");
+                await mintController.connect(controller1).configureMinter(initialAllowance);
+
+                // Create a zero-ceiling controller for the same minter (disabler role)
+                await mintController.connect(owner).configureController(disablerController.address, minter1.address);
+                expect(await mintController.getControllerCeiling(disablerController.address)).to.equal(0);
+
+                // Zero-ceiling controller can decrement (but not increment)
+                const decrement = ethers.parseEther("2000");
+                await mintController.connect(disablerController).decrementMinterAllowance(decrement);
 
                 expect(await minterManager.minterAllowance(minter1.address)).to.equal(initialAllowance - decrement);
             });
@@ -669,13 +792,13 @@ describe("MintController", function () {
                 ).to.be.revertedWithCustomError(mintController, "AllowanceExceedsCeiling");
             });
 
-            it("Should allow one controller with ceiling and another without", async function () {
+            it("Should allow one controller with limited ceiling and another with unlimited", async function () {
                 const { mintController, minterManager, owner, controller1, controller2, minter2 } =
                     await loadFixture(mintControllerWithConfiguredControllersFixture);
 
                 const ceiling1 = ethers.parseEther("5000");
 
-                // Set ceiling only for controller1
+                // Set limited ceiling for controller1
                 await mintController.connect(owner).setControllerCeiling(controller1.address, ceiling1);
 
                 // Controller1 is limited by ceiling
@@ -683,7 +806,10 @@ describe("MintController", function () {
                     mintController.connect(controller1).configureMinter(ethers.parseEther("6000")),
                 ).to.be.revertedWithCustomError(mintController, "AllowanceExceedsCeiling");
 
-                // Controller2 has no ceiling (can set any amount)
+                // Set unlimited ceiling for controller2
+                await mintController.connect(owner).setControllerCeiling(controller2.address, ethers.MaxUint256);
+
+                // Controller2 has unlimited ceiling (can set any amount)
                 const largeAllowance = ethers.parseEther("1000000");
                 await mintController.connect(controller2).configureMinter(largeAllowance);
                 expect(await minterManager.minterAllowance(minter2.address)).to.equal(largeAllowance);

@@ -28,7 +28,9 @@ contract MintController is Controller {
 
     /**
      * @dev Maximum allowance that each controller can assign to its minter.
-     *      A ceiling of 0 means no ceiling is set (unlimited).
+     *      When configureController is called, defaults to 0 (zero-only controller).
+     *      Owner must explicitly set ceiling via setControllerCeiling.
+     *      Special value: type(uint256).max means unlimited.
      */
     mapping(address controller => uint256 ceiling) internal controllerCeilings;
 
@@ -89,7 +91,7 @@ contract MintController is Controller {
     /**
      * @notice Emitted when a controller's allowance ceiling is updated
      * @param controller The address of the controller
-     * @param ceiling The new ceiling value (0 means unlimited)
+     * @param ceiling The new ceiling value (type(uint256).max means unlimited)
      */
     event ControllerCeilingUpdated(address indexed controller, uint256 ceiling);
 
@@ -160,7 +162,7 @@ contract MintController is Controller {
     /**
      * @notice Gets the allowance ceiling for a controller
      * @param controller The address of the controller
-     * @return The ceiling value (0 means unlimited)
+     * @return The ceiling value (type(uint256).max means unlimited)
      */
     function getControllerCeiling(address controller) external view returns (uint256) {
         return controllerCeilings[controller];
@@ -187,11 +189,33 @@ contract MintController is Controller {
     }
 
     /**
+     * @notice Configure a controller with the given worker (minter)
+     * @dev Overrides Controller.configureController to also set a default ceiling of 0.
+     *      The ceiling defaults to 0 (zero-only controller) for safety.
+     *      Owner must call setControllerCeiling to grant higher allowance permissions.
+     * @param controller The controller to be configured with a worker
+     * @param worker The worker (minter) to be set for the controller
+     */
+    function configureController(address controller, address worker) public override onlyOwner {
+        super.configureController(controller, worker);
+        // Set default ceiling to 0 (zero-only, safest default)
+        // Owner must explicitly call setControllerCeiling to grant allowance permissions
+        if (controllerCeilings[controller] == 0) {
+            // Only set if not already configured (to avoid resetting an existing ceiling)
+            controllerCeilings[controller] = 0;
+            emit ControllerCeilingUpdated(controller, 0);
+        }
+    }
+
+    /**
      * @notice Sets the allowance ceiling for a controller
-     * @dev A ceiling of 0 means no ceiling (unlimited allowance).
+     * @dev Ceiling values:
+     *      - 0: Controller can only set allowance to 0 (can only disable minters)
+     *      - Any value > 0 and < max: Maximum allowance the controller can assign
+     *      - type(uint256).max: Unlimited
      *      Only the owner can set controller ceilings.
      * @param controller The address of the controller
-     * @param ceiling The maximum allowance the controller can assign (0 = unlimited)
+     * @param ceiling The maximum allowance the controller can assign
      */
     function setControllerCeiling(address controller, uint256 ceiling) public onlyOwner {
         controllerCeilings[controller] = ceiling;
@@ -283,13 +307,21 @@ contract MintController is Controller {
 
     /**
      * @notice Validates that the requested allowance does not exceed the controller's ceiling
-     * @dev A ceiling of 0 means unlimited (no ceiling set)
+     * @dev Ceiling of type(uint256).max means unlimited (no validation).
+     *      Any other ceiling value is enforced.
      * @param controller The controller address to check
      * @param newAllowance The allowance to validate
      */
     function _validateAllowanceCeiling(address controller, uint256 newAllowance) internal view {
         uint256 ceiling = controllerCeilings[controller];
-        if (ceiling != 0 && newAllowance > ceiling) {
+
+        // Max ceiling means unlimited, no validation needed
+        if (ceiling == type(uint256).max) {
+            return;
+        }
+
+        // Enforce ceiling
+        if (newAllowance > ceiling) {
             revert AllowanceExceedsCeiling(newAllowance, ceiling);
         }
     }

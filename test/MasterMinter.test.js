@@ -77,11 +77,13 @@ describe("MasterMinter", function () {
             recipient,
         } = await loadFixture(deployMasterMinterFixture);
 
-        // Configure controller1 with minter1
+        // Configure controller1 with minter1 and set a reasonable ceiling for testing
         await masterMinter.connect(owner).configureController(controller1.address, minter1.address);
+        await masterMinter.connect(owner).setControllerCeiling(controller1.address, ethers.parseEther("10000"));
 
-        // Configure controller2 with minter2
+        // Configure controller2 with minter2 and set a reasonable ceiling for testing
         await masterMinter.connect(owner).configureController(controller2.address, minter2.address);
+        await masterMinter.connect(owner).setControllerCeiling(controller2.address, ethers.parseEther("10000"));
 
         return {
             masterMinter,
@@ -260,8 +262,9 @@ describe("MasterMinter", function () {
             const { masterMinter, minterManager, owner, controller1, minter1, recipient } =
                 await loadFixture(deployMasterMinterFixture);
 
-            // 1. Owner configures controller1 to manage minter1
+            // 1. Owner configures controller1 to manage minter1 and sets ceiling
             await masterMinter.connect(owner).configureController(controller1.address, minter1.address);
+            await masterMinter.connect(owner).setControllerCeiling(controller1.address, ethers.parseEther("10000"));
 
             // 2. Controller1 configures minter1 with initial allowance
             const initialAllowance = ethers.parseEther("1000");
