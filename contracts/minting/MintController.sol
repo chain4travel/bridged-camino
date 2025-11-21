@@ -26,6 +26,12 @@ contract MintController is Controller {
      */
     IMinterManagement internal minterManager;
 
+    /**
+     * @dev Maximum allowance that each controller can assign to its minter.
+     *      A ceiling of 0 means no ceiling is set (unlimited).
+     */
+    mapping(address controller => uint256 ceiling) internal controllerCeilings;
+
     /***************************************************
      *                    EVENTS                       *
      ***************************************************/
@@ -80,6 +86,13 @@ contract MintController is Controller {
         uint256 newAllowance
     );
 
+    /**
+     * @notice Emitted when a controller's allowance ceiling is updated
+     * @param controller The address of the controller
+     * @param ceiling The new ceiling value (0 means unlimited)
+     */
+    event ControllerCeilingUpdated(address indexed controller, uint256 ceiling);
+
     /***************************************************
      *                    ERRORS                       *
      ***************************************************/
@@ -104,6 +117,13 @@ contract MintController is Controller {
      * @param minter The minter address that is not active
      */
     error MinterNotActive(address minter);
+
+    /**
+     * @notice Thrown when trying to set an allowance that exceeds the controller's ceiling
+     * @param requestedAllowance The allowance that was requested
+     * @param ceiling The maximum allowed ceiling for this controller
+     */
+    error AllowanceExceedsCeiling(uint256 requestedAllowance, uint256 ceiling);
 
     /***************************************************
      *                CONSTRUCTOR                      *
@@ -137,6 +157,15 @@ contract MintController is Controller {
         return minterManager;
     }
 
+    /**
+     * @notice Gets the allowance ceiling for a controller
+     * @param controller The address of the controller
+     * @return The ceiling value (0 means unlimited)
+     */
+    function getControllerCeiling(address controller) external view returns (uint256) {
+        return controllerCeilings[controller];
+    }
+
     /***************************************************
      *           ONLY OWNER FUNCTIONS                  *
      ***************************************************/
@@ -155,6 +184,18 @@ contract MintController is Controller {
 
         emit MinterManagerSet(address(minterManager), newMinterManager);
         minterManager = IMinterManagement(newMinterManager);
+    }
+
+    /**
+     * @notice Sets the allowance ceiling for a controller
+     * @dev A ceiling of 0 means no ceiling (unlimited allowance).
+     *      Only the owner can set controller ceilings.
+     * @param controller The address of the controller
+     * @param ceiling The maximum allowance the controller can assign (0 = unlimited)
+     */
+    function setControllerCeiling(address controller, uint256 ceiling) public onlyOwner {
+        controllerCeilings[controller] = ceiling;
+        emit ControllerCeilingUpdated(controller, ceiling);
     }
 
     /***************************************************
@@ -177,6 +218,7 @@ contract MintController is Controller {
      * @param newAllowance New allowance to be set for minter
      */
     function configureMinter(uint256 newAllowance) public onlyController {
+        _validateAllowanceCeiling(msg.sender, newAllowance);
         address minter = controllers[msg.sender];
         emit MinterConfigured(msg.sender, minter, newAllowance);
         _setMinterAllowance(minter, newAllowance);
@@ -200,6 +242,8 @@ contract MintController is Controller {
 
         uint256 currentAllowance = minterManager.minterAllowance(minter);
         uint256 newAllowance = currentAllowance + allowanceIncrement;
+
+        _validateAllowanceCeiling(msg.sender, newAllowance);
 
         emit MinterAllowanceIncremented(msg.sender, minter, allowanceIncrement, newAllowance);
         _setMinterAllowance(minter, newAllowance);
@@ -236,6 +280,19 @@ contract MintController is Controller {
     /***************************************************
      *           INTERNAL FUNCTIONS                    *
      ***************************************************/
+
+    /**
+     * @notice Validates that the requested allowance does not exceed the controller's ceiling
+     * @dev A ceiling of 0 means unlimited (no ceiling set)
+     * @param controller The controller address to check
+     * @param newAllowance The allowance to validate
+     */
+    function _validateAllowanceCeiling(address controller, uint256 newAllowance) internal view {
+        uint256 ceiling = controllerCeilings[controller];
+        if (ceiling != 0 && newAllowance > ceiling) {
+            revert AllowanceExceedsCeiling(newAllowance, ceiling);
+        }
+    }
 
     /**
      * @notice Uses the IMinterManagement interface to enable the minter and set its allowance
