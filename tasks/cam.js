@@ -903,7 +903,7 @@ camScope
             success(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
             success(`Token: ${name} (${symbol})`, 0);
             success(`Total Supply: ${ethers.formatUnits(totalSupply, decimals)} ${symbol}`, 0);
-            success(`Paused: ${isPaused ? "YES" : "NO"}`, 0);
+            success(`Paused: ${isPaused ? `${colors.red + colors.bright}YES` : `${colors.green}NO`}`, 0);
             success(`Minters: ${minterCount}`, 0);
             success(`MasterMinter Owner: ${masterMinterOwner}`, 0);
 
@@ -1671,16 +1671,8 @@ camScope
 
             log();
             subheader("Balances Before");
-            log(
-                `Sender:      ${ethers.formatUnits(senderBalanceBefore, decimals)} ${symbol}`,
-                1,
-                colors.yellow,
-            );
-            log(
-                `Recipient:   ${ethers.formatUnits(recipientBalanceBefore, decimals)} ${symbol}`,
-                1,
-                colors.cyan,
-            );
+            log(`Sender:      ${ethers.formatUnits(senderBalanceBefore, decimals)} ${symbol}`, 1, colors.yellow);
+            log(`Recipient:   ${ethers.formatUnits(recipientBalanceBefore, decimals)} ${symbol}`, 1, colors.cyan);
 
             // Send transaction
             log();
@@ -1707,20 +1699,136 @@ camScope
 
             log();
             subheader("Changes");
-            log(
-                `Sender:      -${amountFormatted} ${symbol}`,
-                1,
-                colors.red,
-            );
-            log(
-                `Recipient:   +${amountFormatted} ${symbol}`,
-                1,
-                colors.green,
-            );
+            log(`Sender:      -${amountFormatted} ${symbol}`, 1, colors.red);
+            log(`Recipient:   +${amountFormatted} ${symbol}`, 1, colors.green);
 
             log();
         } catch (err) {
             error("Transfer transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("pause", "Pause or unpause the token contract (pauser role only)")
+    .addFlag("unpause", "Unpause the contract instead of pausing it")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of pauser (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            const action = taskArgs.unpause ? "Unpause" : "Pause";
+            header(`${action} Token Contract`);
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const pauserAddress = await signer.getAddress();
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const name = await token.name();
+            const isPaused = await token.paused();
+
+            // Check current pause state
+            if (!taskArgs.unpause && isPaused) {
+                warning("Contract is already paused", 0);
+                log();
+                info("Use --unpause flag to unpause the contract", 0);
+                process.exit(0);
+            }
+
+            if (taskArgs.unpause && !isPaused) {
+                warning("Contract is not paused", 0);
+                log();
+                info("Contract is already operational", 0);
+                process.exit(0);
+            }
+
+            // Check if signer has PAUSER_ROLE
+            const PAUSER_ROLE = await token.PAUSER_ROLE();
+            const isPauser = await token.hasRole(PAUSER_ROLE, pauserAddress);
+            if (!isPauser) {
+                throw new Error(
+                    `Address ${pauserAddress} does not have PAUSER_ROLE.\n` +
+                        `Only addresses with PAUSER_ROLE can pause/unpause the contract.`,
+                );
+            }
+
+            subheader("Transaction Details");
+            log(`Token:          ${name} (${symbol})`, 1, colors.bright);
+            log(`Token Proxy:    ${proxyAddress}`, 1, colors.cyan);
+            log(`Pauser:         ${pauserAddress}`, 1, colors.bright);
+            log(`Action:         ${action}`, 1, taskArgs.unpause ? colors.green : colors.yellow);
+            log(`Current State:  ${isPaused ? "PAUSED" : "OPERATIONAL"}`, 1, isPaused ? colors.red : colors.green);
+
+            log();
+            if (taskArgs.unpause) {
+                info("Unpausing will resume normal token operations (minting and transfers)", 0);
+            } else {
+                warning("Pausing will prevent minting and transfers (burns still allowed)", 0);
+            }
+
+            // Send transaction
+            log();
+            log(`Sending ${action.toLowerCase()} transaction...`, 0, colors.cyan);
+            let tx;
+            if (taskArgs.unpause) {
+                tx = await token.unpause();
+            } else {
+                tx = await token.pause();
+            }
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Verify new state
+            const newPauseState = await token.paused();
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Contract ${taskArgs.unpause ? "unpaused" : "paused"} successfully`, 0);
+
+            log();
+            subheader("Contract State");
+            log(`Status:  ${newPauseState ? "PAUSED" : "OPERATIONAL"}`, 1, newPauseState ? colors.red : colors.green);
+
+            if (newPauseState) {
+                warning("Minting and transfers are now disabled", 1);
+                info("Burns are still allowed during pause", 1);
+            } else {
+                success("All token operations are now enabled", 1);
+            }
+
+            log();
+        } catch (err) {
+            error(`${taskArgs.unpause ? "Unpause" : "Pause"} transaction failed!`, 0);
             error(err.message, 0);
 
             if (err.stack) {
