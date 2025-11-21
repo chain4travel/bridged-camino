@@ -623,7 +623,7 @@ camScope
                 throw new Error(`No contract found at MasterMinter address: ${masterMinterAddress}`);
             }
 
-            success("Contracts verified on-chain", 0);
+            success("Addresses above verified to be contracts deployed on-chain", 0);
 
             // Get contract instances
             const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress);
@@ -1309,7 +1309,11 @@ camScope
             log(`Recipient:      ${taskArgs.to} (${recipientType})`, 1, colors.cyan);
             log(`Amount:         ${amountFormatted} ${symbol}`, 1, colors.green);
             log(`Current Allowance: ${allowanceFormatted} ${symbol}`, 1, colors.yellow);
-            log(`New Allowance:     ${ethers.formatUnits(allowance - amountInWei, decimals)} ${symbol}`, 1, colors.yellow);
+            log(
+                `New Allowance:     ${ethers.formatUnits(allowance - amountInWei, decimals)} ${symbol}`,
+                1,
+                colors.yellow,
+            );
 
             // Get current balances
             const recipientBalanceBefore = await token.balanceOf(taskArgs.to);
@@ -1347,6 +1351,154 @@ camScope
             log();
         } catch (err) {
             error("Mint transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("burn", "Burn tokens (minter only)")
+    .addParam("amount", "Amount of tokens to burn (in token units, e.g., 100.5)")
+    .addOptionalParam("from", "Address to burn from (requires approval, defaults to caller)")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of minter (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Burn Tokens");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const minterAddress = await signer.getAddress();
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const decimals = await token.decimals();
+            const name = await token.name();
+            const isPaused = await token.paused();
+
+            // Check if signer is a minter
+            const MINTER_ROLE = await token.MINTER_ROLE();
+            const isMinter = await token.hasRole(MINTER_ROLE, minterAddress);
+            if (!isMinter) {
+                throw new Error(
+                    `Address ${minterAddress} does not have MINTER_ROLE.\n` +
+                        `Only addresses with MINTER_ROLE can burn tokens.`,
+                );
+            }
+
+            // Parse amount
+            const amountInWei = ethers.parseUnits(taskArgs.amount, decimals);
+            const amountFormatted = ethers.formatUnits(amountInWei, decimals);
+
+            // Determine if burning from self or another address
+            const burnFromAddress = taskArgs.from || minterAddress;
+            const isBurnFrom = taskArgs.from && taskArgs.from.toLowerCase() !== minterAddress.toLowerCase();
+
+            // Get address type
+            const fromAddressType = await getAddressType(burnFromAddress, provider);
+
+            // Get current balances
+            const burnerBalanceBefore = await token.balanceOf(burnFromAddress);
+            const totalSupplyBefore = await token.totalSupply();
+
+            // Check if burner has enough balance
+            if (burnerBalanceBefore < amountInWei) {
+                throw new Error(
+                    `Insufficient balance to burn.\n` +
+                        `Requested: ${amountFormatted} ${symbol}\n` +
+                        `Available: ${ethers.formatUnits(burnerBalanceBefore, decimals)} ${symbol}`,
+                );
+            }
+
+            // If burning from another address, check allowance
+            if (isBurnFrom) {
+                const allowance = await token.allowance(burnFromAddress, minterAddress);
+                if (allowance < amountInWei) {
+                    throw new Error(
+                        `Insufficient allowance to burn from ${burnFromAddress}.\n` +
+                            `Required: ${amountFormatted} ${symbol}\n` +
+                            `Approved: ${ethers.formatUnits(allowance, decimals)} ${symbol}\n` +
+                            `The address must approve the minter first.`,
+                    );
+                }
+            }
+
+            subheader("Transaction Details");
+            log(`Token:          ${name} (${symbol})`, 1, colors.bright);
+            log(`Token Proxy:    ${proxyAddress}`, 1, colors.cyan);
+            log(`Minter:         ${minterAddress}`, 1, colors.bright);
+            if (isBurnFrom) {
+                log(`Burn From:      ${burnFromAddress} (${fromAddressType})`, 1, colors.yellow);
+            } else {
+                log(`Burn From:      Self (${fromAddressType})`, 1, colors.yellow);
+            }
+            log(`Amount:         ${amountFormatted} ${symbol}`, 1, colors.red);
+
+            if (isPaused) {
+                warning("Contract is paused, but burn is still allowed", 0);
+            }
+
+            log();
+            info(`Balance before:  ${ethers.formatUnits(burnerBalanceBefore, decimals)} ${symbol}`, 0);
+            info(`Total supply before: ${ethers.formatUnits(totalSupplyBefore, decimals)} ${symbol}`, 0);
+
+            // Send transaction
+            log();
+            log("Sending burn transaction...", 0, colors.cyan);
+            let tx;
+            if (isBurnFrom) {
+                tx = await token.burnFrom(burnFromAddress, amountInWei);
+            } else {
+                tx = await token.burn(amountInWei);
+            }
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Get new balances
+            const burnerBalanceAfter = await token.balanceOf(burnFromAddress);
+            const totalSupplyAfter = await token.totalSupply();
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Burned ${amountFormatted} ${symbol}${isBurnFrom ? ` from ${burnFromAddress}` : ""}`, 0);
+
+            log();
+            subheader("Updated Balances");
+            log(`Balance after:   ${ethers.formatUnits(burnerBalanceAfter, decimals)} ${symbol}`, 1, colors.green);
+            log(`Total supply:    ${ethers.formatUnits(totalSupplyAfter, decimals)} ${symbol}`, 1, colors.green);
+            log(`Burned amount:   ${amountFormatted} ${symbol}`, 1, colors.red);
+
+            log();
+        } catch (err) {
+            error("Burn transaction failed!", 0);
             error(err.message, 0);
 
             if (err.stack) {
