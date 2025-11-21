@@ -1718,16 +1718,14 @@ camScope
     });
 
 camScope
-    .task("pause", "Pause or unpause the token contract (pauser role only)")
-    .addFlag("unpause", "Unpause the contract instead of pausing it")
+    .task("pause", "Pause the token contract (pauser role only)")
     .addOptionalParam("deploymentId", "Deployment ID")
     .addOptionalParam("privateKey", "Private key of pauser (prompted if not provided)")
     .setAction(async (taskArgs, hre) => {
         const { ethers, network } = hre;
 
         try {
-            const action = taskArgs.unpause ? "Unpause" : "Pause";
-            header(`${action} Token Contract`);
+            header("Pause Token Contract");
 
             // Get network info
             const provider = ethers.provider;
@@ -1755,14 +1753,111 @@ camScope
             const isPaused = await token.paused();
 
             // Check current pause state
-            if (!taskArgs.unpause && isPaused) {
+            if (isPaused) {
                 warning("Contract is already paused", 0);
                 log();
-                info("Use --unpause flag to unpause the contract", 0);
+                info("Use cam:unpause to unpause the contract", 0);
                 process.exit(0);
             }
 
-            if (taskArgs.unpause && !isPaused) {
+            // Check if signer has PAUSER_ROLE
+            const PAUSER_ROLE = await token.PAUSER_ROLE();
+            const isPauser = await token.hasRole(PAUSER_ROLE, pauserAddress);
+            if (!isPauser) {
+                throw new Error(
+                    `Address ${pauserAddress} does not have PAUSER_ROLE.\n` +
+                        `Only addresses with PAUSER_ROLE can pause the contract.`,
+                );
+            }
+
+            subheader("Transaction Details");
+            log(`Token:          ${name} (${symbol})`, 1, colors.bright);
+            log(`Token Proxy:    ${proxyAddress}`, 1, colors.cyan);
+            log(`Pauser:         ${pauserAddress}`, 1, colors.bright);
+            log(`Action:         Pause`, 1, colors.yellow);
+            log(`Current State:  OPERATIONAL`, 1, colors.green);
+
+            log();
+            warning("Pausing will prevent minting and transfers (burns still allowed)", 0);
+
+            // Send transaction
+            log();
+            log("Sending pause transaction...", 0, colors.cyan);
+            const tx = await token.pause();
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Verify new state
+            const newPauseState = await token.paused();
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success("Contract paused successfully", 0);
+
+            log();
+            subheader("Contract State");
+            log(`Status:  ${newPauseState ? "PAUSED" : "OPERATIONAL"}`, 1, newPauseState ? colors.red : colors.green);
+
+            if (newPauseState) {
+                warning("Minting and transfers are now disabled", 1);
+                info("Burns are still allowed during pause", 1);
+            }
+
+            log();
+        } catch (err) {
+            error("Pause transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("unpause", "Unpause the token contract (pauser role only)")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of pauser (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Unpause Token Contract");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const pauserAddress = await signer.getAddress();
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const name = await token.name();
+            const isPaused = await token.paused();
+
+            // Check current pause state
+            if (!isPaused) {
                 warning("Contract is not paused", 0);
                 log();
                 info("Contract is already operational", 0);
@@ -1775,7 +1870,7 @@ camScope
             if (!isPauser) {
                 throw new Error(
                     `Address ${pauserAddress} does not have PAUSER_ROLE.\n` +
-                        `Only addresses with PAUSER_ROLE can pause/unpause the contract.`,
+                        `Only addresses with PAUSER_ROLE can unpause the contract.`,
                 );
             }
 
@@ -1783,25 +1878,16 @@ camScope
             log(`Token:          ${name} (${symbol})`, 1, colors.bright);
             log(`Token Proxy:    ${proxyAddress}`, 1, colors.cyan);
             log(`Pauser:         ${pauserAddress}`, 1, colors.bright);
-            log(`Action:         ${action}`, 1, taskArgs.unpause ? colors.green : colors.yellow);
-            log(`Current State:  ${isPaused ? "PAUSED" : "OPERATIONAL"}`, 1, isPaused ? colors.red : colors.green);
+            log(`Action:         Unpause`, 1, colors.green);
+            log(`Current State:  PAUSED`, 1, colors.red);
 
             log();
-            if (taskArgs.unpause) {
-                info("Unpausing will resume normal token operations (minting and transfers)", 0);
-            } else {
-                warning("Pausing will prevent minting and transfers (burns still allowed)", 0);
-            }
+            info("Unpausing will resume normal token operations (minting and transfers)", 0);
 
             // Send transaction
             log();
-            log(`Sending ${action.toLowerCase()} transaction...`, 0, colors.cyan);
-            let tx;
-            if (taskArgs.unpause) {
-                tx = await token.unpause();
-            } else {
-                tx = await token.pause();
-            }
+            log("Sending unpause transaction...", 0, colors.cyan);
+            const tx = await token.unpause();
             info(`Transaction hash: ${tx.hash}`, 0);
 
             log("Waiting for confirmation...", 0, colors.cyan);
@@ -1813,22 +1899,794 @@ camScope
             header("Transaction Confirmed");
             success(`Block number: ${receipt.blockNumber}`, 0);
             success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
-            success(`Contract ${taskArgs.unpause ? "unpaused" : "paused"} successfully`, 0);
+            success("Contract unpaused successfully", 0);
 
             log();
             subheader("Contract State");
             log(`Status:  ${newPauseState ? "PAUSED" : "OPERATIONAL"}`, 1, newPauseState ? colors.red : colors.green);
 
-            if (newPauseState) {
-                warning("Minting and transfers are now disabled", 1);
-                info("Burns are still allowed during pause", 1);
-            } else {
+            if (!newPauseState) {
                 success("All token operations are now enabled", 1);
             }
 
             log();
         } catch (err) {
-            error(`${taskArgs.unpause ? "Unpause" : "Pause"} transaction failed!`, 0);
+            error("Unpause transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("blacklist", "Add an address to the blacklist (blacklister role only)")
+    .addParam("address", "Address to blacklist")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of blacklister (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Blacklist Address");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const blacklisterAddress = await signer.getAddress();
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const name = await token.name();
+
+            // Check if signer has BLACKLISTER_ROLE
+            const BLACKLISTER_ROLE = await token.BLACKLISTER_ROLE();
+            const isBlacklister = await token.hasRole(BLACKLISTER_ROLE, blacklisterAddress);
+            if (!isBlacklister) {
+                throw new Error(
+                    `Address ${blacklisterAddress} does not have BLACKLISTER_ROLE.\n` +
+                        `Only addresses with BLACKLISTER_ROLE can blacklist addresses.`,
+                );
+            }
+
+            // Check if address is already blacklisted
+            const isAlreadyBlacklisted = await token.isBlacklisted(taskArgs.address);
+            if (isAlreadyBlacklisted) {
+                warning(`Address ${taskArgs.address} is already blacklisted`, 0);
+                process.exit(0);
+            }
+
+            // Get address type
+            const addressType = await getAddressType(taskArgs.address, provider);
+
+            // Get balance before blacklisting
+            const balance = await token.balanceOf(taskArgs.address);
+            const decimals = await token.decimals();
+            const balanceFormatted = ethers.formatUnits(balance, decimals);
+
+            subheader("Transaction Details");
+            log(`Token:          ${name} (${symbol})`, 1, colors.bright);
+            log(`Token Proxy:    ${proxyAddress}`, 1, colors.cyan);
+            log(`Blacklister:    ${blacklisterAddress}`, 1, colors.bright);
+            log(`Target Address: ${taskArgs.address} (${addressType})`, 1, colors.red);
+            log(`Target Balance: ${balanceFormatted} ${symbol}`, 1, colors.yellow);
+
+            log();
+            warning("Blacklisting will prevent this address from transferring, receiving, or approving tokens", 0);
+            warning("The balance will be frozen until the address is unblacklisted", 0);
+
+            // Send transaction
+            log();
+            log("Sending blacklist transaction...", 0, colors.cyan);
+            const tx = await token.blacklist(taskArgs.address);
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Verify blacklist status
+            const isBlacklistedNow = await token.isBlacklisted(taskArgs.address);
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Address ${taskArgs.address} has been blacklisted`, 0);
+
+            log();
+            subheader("Blacklist Status");
+            log(`Status:    ${isBlacklistedNow ? "BLACKLISTED" : "NOT BLACKLISTED"}`, 1, colors.red);
+            log(`Balance:   ${balanceFormatted} ${symbol} (frozen)`, 1, colors.yellow);
+
+            log();
+        } catch (err) {
+            error("Blacklist transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("unblacklist", "Remove an address from the blacklist (blacklister role only)")
+    .addParam("address", "Address to unblacklist")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of blacklister (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Unblacklist Address");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const blacklisterAddress = await signer.getAddress();
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const name = await token.name();
+
+            // Check if signer has BLACKLISTER_ROLE
+            const BLACKLISTER_ROLE = await token.BLACKLISTER_ROLE();
+            const isBlacklister = await token.hasRole(BLACKLISTER_ROLE, blacklisterAddress);
+            if (!isBlacklister) {
+                throw new Error(
+                    `Address ${blacklisterAddress} does not have BLACKLISTER_ROLE.\n` +
+                        `Only addresses with BLACKLISTER_ROLE can unblacklist addresses.`,
+                );
+            }
+
+            // Check if address is blacklisted
+            const isCurrentlyBlacklisted = await token.isBlacklisted(taskArgs.address);
+            if (!isCurrentlyBlacklisted) {
+                warning(`Address ${taskArgs.address} is not blacklisted`, 0);
+                process.exit(0);
+            }
+
+            // Get address type
+            const addressType = await getAddressType(taskArgs.address, provider);
+
+            // Get balance
+            const balance = await token.balanceOf(taskArgs.address);
+            const decimals = await token.decimals();
+            const balanceFormatted = ethers.formatUnits(balance, decimals);
+
+            subheader("Transaction Details");
+            log(`Token:          ${name} (${symbol})`, 1, colors.bright);
+            log(`Token Proxy:    ${proxyAddress}`, 1, colors.cyan);
+            log(`Blacklister:    ${blacklisterAddress}`, 1, colors.bright);
+            log(`Target Address: ${taskArgs.address} (${addressType})`, 1, colors.green);
+            log(`Target Balance: ${balanceFormatted} ${symbol} (currently frozen)`, 1, colors.yellow);
+
+            log();
+            info("Unblacklisting will restore token transfer capabilities for this address", 0);
+
+            // Send transaction
+            log();
+            log("Sending unblacklist transaction...", 0, colors.cyan);
+            const tx = await token.unBlacklist(taskArgs.address);
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Verify blacklist status
+            const isBlacklistedNow = await token.isBlacklisted(taskArgs.address);
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Address ${taskArgs.address} has been unblacklisted`, 0);
+
+            log();
+            subheader("Blacklist Status");
+            log(`Status:    ${isBlacklistedNow ? "BLACKLISTED" : "NOT BLACKLISTED"}`, 1, colors.green);
+            log(`Balance:   ${balanceFormatted} ${symbol} (unfrozen)`, 1, colors.green);
+
+            log();
+        } catch (err) {
+            error("Unblacklist transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("is-blacklisted", "Check if an address is blacklisted")
+    .addPositionalParam("address", "Address to check")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Check Blacklist Status");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const name = await token.name();
+
+            // Get address type
+            const addressType = await getAddressType(taskArgs.address, provider);
+
+            // Check blacklist status
+            const isBlacklisted = await token.isBlacklisted(taskArgs.address);
+
+            // Get balance
+            const balance = await token.balanceOf(taskArgs.address);
+            const decimals = await token.decimals();
+            const balanceFormatted = ethers.formatUnits(balance, decimals);
+
+            subheader("Token Information");
+            log(`Token:       ${name} (${symbol})`, 1, colors.bright);
+            log(`Token Proxy: ${proxyAddress}`, 1, colors.cyan);
+
+            log();
+            subheader("Address Information");
+            log(`Address:     ${taskArgs.address}`, 1, colors.bright);
+            log(`Type:        ${addressType}`, 1, addressType === "Contract" ? colors.cyan : colors.reset);
+            log(`Balance:     ${balanceFormatted} ${symbol}`, 1);
+
+            log();
+            subheader("Blacklist Status");
+            const statusColor = isBlacklisted ? colors.red : colors.green;
+            const statusText = isBlacklisted ? "BLACKLISTED" : "NOT BLACKLISTED";
+            log(`Status:      ${statusText}`, 1, statusColor);
+
+            if (isBlacklisted) {
+                warning("This address cannot transfer, receive, or approve tokens", 1);
+                log(`Balance of ${balanceFormatted} ${symbol} is frozen`, 1, colors.yellow);
+            } else {
+                success("This address can interact with tokens normally", 1);
+            }
+
+            log();
+        } catch (err) {
+            error("Blacklist check failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("increment-minter-allowance", "Increase minter's allowance (controller only)")
+    .addParam("increment", "Amount to increment allowance by (in token units)")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of controller (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Increment Minter Allowance");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress, masterMinterAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const controllerAddress = await signer.getAddress();
+
+            // Get contract instances
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress);
+            const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const decimals = await token.decimals();
+            const name = await token.name();
+
+            // Get controller's worker
+            const worker = await masterMinter.getWorker(controllerAddress);
+            if (worker === ethers.ZeroAddress) {
+                throw new Error(
+                    `Address ${controllerAddress} is not a configured controller.\n` +
+                        `Controllers must be configured by the MasterMinter owner first.`,
+                );
+            }
+
+            // Check if worker is a minter
+            const isMinter = await token.isMinter(worker);
+            if (!isMinter) {
+                throw new Error(
+                    `Worker ${worker} is not an active minter.\n` +
+                        `Call configureMinter first to activate the minter.`,
+                );
+            }
+
+            // Get current allowance
+            const currentAllowance = await token.minterAllowance(worker);
+            const currentAllowanceFormatted = ethers.formatUnits(currentAllowance, decimals);
+
+            // Parse increment
+            const incrementInWei = ethers.parseUnits(taskArgs.increment, decimals);
+            const incrementFormatted = ethers.formatUnits(incrementInWei, decimals);
+            const newAllowance = currentAllowance + incrementInWei;
+            const newAllowanceFormatted = ethers.formatUnits(newAllowance, decimals);
+
+            // Get address types
+            const workerType = await getAddressType(worker, provider);
+
+            subheader("Transaction Details");
+            log(`Token:             ${name} (${symbol})`, 1, colors.bright);
+            log(`MasterMinter:      ${masterMinterAddress}`, 1, colors.cyan);
+            log(`Controller:        ${controllerAddress}`, 1, colors.bright);
+            log(`Worker/Minter:     ${worker} (${workerType})`, 1, colors.green);
+            log(`Current Allowance: ${currentAllowanceFormatted} ${symbol}`, 1, colors.yellow);
+            log(`Increment:         +${incrementFormatted} ${symbol}`, 1, colors.cyan);
+            log(`New Allowance:     ${newAllowanceFormatted} ${symbol}`, 1, colors.green);
+
+            // Send transaction
+            log();
+            log("Sending increment transaction...", 0, colors.cyan);
+            const tx = await masterMinter.incrementMinterAllowance(incrementInWei);
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Get updated allowance
+            const updatedAllowance = await token.minterAllowance(worker);
+            const updatedAllowanceFormatted = ethers.formatUnits(updatedAllowance, decimals);
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Minter allowance increased by ${incrementFormatted} ${symbol}`, 0);
+
+            log();
+            subheader("Updated Allowance");
+            log(`Worker/Minter: ${worker}`, 1, colors.green);
+            log(`Allowance:     ${updatedAllowanceFormatted} ${symbol}`, 1, colors.bright + colors.green);
+
+            log();
+        } catch (err) {
+            error("Increment allowance transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("decrement-minter-allowance", "Decrease minter's allowance (controller only)")
+    .addParam("decrement", "Amount to decrement allowance by (in token units)")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of controller (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Decrement Minter Allowance");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress, masterMinterAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const controllerAddress = await signer.getAddress();
+
+            // Get contract instances
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress);
+            const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const decimals = await token.decimals();
+            const name = await token.name();
+
+            // Get controller's worker
+            const worker = await masterMinter.getWorker(controllerAddress);
+            if (worker === ethers.ZeroAddress) {
+                throw new Error(
+                    `Address ${controllerAddress} is not a configured controller.\n` +
+                        `Controllers must be configured by the MasterMinter owner first.`,
+                );
+            }
+
+            // Check if worker is a minter
+            const isMinter = await token.isMinter(worker);
+            if (!isMinter) {
+                throw new Error(
+                    `Worker ${worker} is not an active minter.\n` +
+                        `The minter must be active to decrement allowance.`,
+                );
+            }
+
+            // Get current allowance
+            const currentAllowance = await token.minterAllowance(worker);
+            const currentAllowanceFormatted = ethers.formatUnits(currentAllowance, decimals);
+
+            // Parse decrement
+            const decrementInWei = ethers.parseUnits(taskArgs.decrement, decimals);
+            const decrementFormatted = ethers.formatUnits(decrementInWei, decimals);
+
+            // Calculate new allowance (will be capped at 0 if decrement exceeds current)
+            const actualDecrement = currentAllowance > decrementInWei ? decrementInWei : currentAllowance;
+            const newAllowance = currentAllowance - actualDecrement;
+            const actualDecrementFormatted = ethers.formatUnits(actualDecrement, decimals);
+            const newAllowanceFormatted = ethers.formatUnits(newAllowance, decimals);
+
+            // Get address types
+            const workerType = await getAddressType(worker, provider);
+
+            subheader("Transaction Details");
+            log(`Token:             ${name} (${symbol})`, 1, colors.bright);
+            log(`MasterMinter:      ${masterMinterAddress}`, 1, colors.cyan);
+            log(`Controller:        ${controllerAddress}`, 1, colors.bright);
+            log(`Worker/Minter:     ${worker} (${workerType})`, 1, colors.green);
+            log(`Current Allowance: ${currentAllowanceFormatted} ${symbol}`, 1, colors.yellow);
+            log(`Decrement:         -${decrementFormatted} ${symbol}`, 1, colors.red);
+            if (actualDecrement < decrementInWei) {
+                warning(
+                    `Actual decrement will be ${actualDecrementFormatted} ${symbol} (capped at current allowance)`,
+                    1,
+                );
+            }
+            log(`New Allowance:     ${newAllowanceFormatted} ${symbol}`, 1, colors.yellow);
+
+            // Send transaction
+            log();
+            log("Sending decrement transaction...", 0, colors.cyan);
+            const tx = await masterMinter.decrementMinterAllowance(decrementInWei);
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Get updated allowance
+            const updatedAllowance = await token.minterAllowance(worker);
+            const updatedAllowanceFormatted = ethers.formatUnits(updatedAllowance, decimals);
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Minter allowance decreased by ${actualDecrementFormatted} ${symbol}`, 0);
+
+            log();
+            subheader("Updated Allowance");
+            log(`Worker/Minter: ${worker}`, 1, colors.green);
+            log(`Allowance:     ${updatedAllowanceFormatted} ${symbol}`, 1, colors.bright + colors.yellow);
+
+            log();
+        } catch (err) {
+            error("Decrement allowance transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("grant-role", "Grant a role to an address (role admin only)")
+    .addParam("role", "Role name (e.g., MINTER_ROLE, PAUSER_ROLE) or role hash")
+    .addParam("account", "Address to grant the role to")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of role admin (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Grant Role");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const adminAddress = await signer.getAddress();
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const name = await token.name();
+
+            // Resolve role hash
+            let roleHash;
+            let roleName = taskArgs.role;
+            if (taskArgs.role.startsWith("0x")) {
+                // Already a hash
+                roleHash = taskArgs.role;
+                roleName = "Custom Role";
+            } else {
+                // Try to resolve from contract
+                try {
+                    roleHash = await token[taskArgs.role]();
+                } catch (err) {
+                    throw new Error(
+                        `Could not resolve role "${taskArgs.role}".\n` +
+                            `Use a role name like "MINTER_ROLE" or provide the role hash directly (0x...)`,
+                    );
+                }
+            }
+
+            // Check if account already has the role
+            const hasRole = await token.hasRole(roleHash, taskArgs.account);
+            if (hasRole) {
+                warning(`Address ${taskArgs.account} already has ${roleName}`, 0);
+                process.exit(0);
+            }
+
+            // Get role admin
+            const roleAdmin = await token.getRoleAdmin(roleHash);
+            const hasAdminRole = await token.hasRole(roleAdmin, adminAddress);
+            if (!hasAdminRole) {
+                throw new Error(
+                    `Address ${adminAddress} does not have admin privileges for ${roleName}.\n` +
+                        `This role requires the admin role: ${roleAdmin}`,
+                );
+            }
+
+            // Get address type
+            const accountType = await getAddressType(taskArgs.account, provider);
+
+            subheader("Transaction Details");
+            log(`Token:       ${name} (${symbol})`, 1, colors.bright);
+            log(`Token Proxy: ${proxyAddress}`, 1, colors.cyan);
+            log(`Admin:       ${adminAddress}`, 1, colors.bright);
+            log(`Role:        ${roleName}`, 1, colors.cyan);
+            log(`Role Hash:   ${roleHash}`, 1, colors.cyan);
+            log(`Account:     ${taskArgs.account} (${accountType})`, 1, colors.green);
+
+            // Send transaction
+            log();
+            log("Sending grant role transaction...", 0, colors.cyan);
+            const tx = await token.grantRole(roleHash, taskArgs.account);
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Verify role was granted
+            const hasRoleNow = await token.hasRole(roleHash, taskArgs.account);
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Role ${roleName} granted to ${taskArgs.account}`, 0);
+
+            log();
+            subheader("Role Status");
+            log(`Account: ${taskArgs.account}`, 1, colors.green);
+            log(`Role:    ${roleName}`, 1, colors.cyan);
+            log(`Status:  ${hasRoleNow ? "GRANTED" : "NOT GRANTED"}`, 1, hasRoleNow ? colors.green : colors.red);
+
+            log();
+        } catch (err) {
+            error("Grant role transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("revoke-role", "Revoke a role from an address (role admin only)")
+    .addParam("role", "Role name (e.g., MINTER_ROLE, PAUSER_ROLE) or role hash")
+    .addParam("account", "Address to revoke the role from")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of role admin (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Revoke Role");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const adminAddress = await signer.getAddress();
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const name = await token.name();
+
+            // Resolve role hash
+            let roleHash;
+            let roleName = taskArgs.role;
+            if (taskArgs.role.startsWith("0x")) {
+                // Already a hash
+                roleHash = taskArgs.role;
+                roleName = "Custom Role";
+            } else {
+                // Try to resolve from contract
+                try {
+                    roleHash = await token[taskArgs.role]();
+                } catch (err) {
+                    throw new Error(
+                        `Could not resolve role "${taskArgs.role}".\n` +
+                            `Use a role name like "MINTER_ROLE" or provide the role hash directly (0x...)`,
+                    );
+                }
+            }
+
+            // Check if account has the role
+            const hasRole = await token.hasRole(roleHash, taskArgs.account);
+            if (!hasRole) {
+                warning(`Address ${taskArgs.account} does not have ${roleName}`, 0);
+                process.exit(0);
+            }
+
+            // Get role admin
+            const roleAdmin = await token.getRoleAdmin(roleHash);
+            const hasAdminRole = await token.hasRole(roleAdmin, adminAddress);
+            if (!hasAdminRole) {
+                throw new Error(
+                    `Address ${adminAddress} does not have admin privileges for ${roleName}.\n` +
+                        `This role requires the admin role: ${roleAdmin}`,
+                );
+            }
+
+            // Get address type
+            const accountType = await getAddressType(taskArgs.account, provider);
+
+            subheader("Transaction Details");
+            log(`Token:       ${name} (${symbol})`, 1, colors.bright);
+            log(`Token Proxy: ${proxyAddress}`, 1, colors.cyan);
+            log(`Admin:       ${adminAddress}`, 1, colors.bright);
+            log(`Role:        ${roleName}`, 1, colors.yellow);
+            log(`Role Hash:   ${roleHash}`, 1, colors.cyan);
+            log(`Account:     ${taskArgs.account} (${accountType})`, 1, colors.red);
+
+            // Send transaction
+            log();
+            log("Sending revoke role transaction...", 0, colors.cyan);
+            const tx = await token.revokeRole(roleHash, taskArgs.account);
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Verify role was revoked
+            const hasRoleNow = await token.hasRole(roleHash, taskArgs.account);
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Role ${roleName} revoked from ${taskArgs.account}`, 0);
+
+            log();
+            subheader("Role Status");
+            log(`Account: ${taskArgs.account}`, 1, colors.yellow);
+            log(`Role:    ${roleName}`, 1, colors.cyan);
+            log(`Status:  ${hasRoleNow ? "GRANTED" : "REVOKED"}`, 1, hasRoleNow ? colors.red : colors.green);
+
+            log();
+        } catch (err) {
+            error("Revoke role transaction failed!", 0);
             error(err.message, 0);
 
             if (err.stack) {
