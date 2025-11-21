@@ -2382,8 +2382,7 @@ camScope
             const isMinter = await token.isMinter(worker);
             if (!isMinter) {
                 throw new Error(
-                    `Worker ${worker} is not an active minter.\n` +
-                        `The minter must be active to decrement allowance.`,
+                    `Worker ${worker} is not an active minter.\n` + `The minter must be active to decrement allowance.`,
                 );
             }
 
