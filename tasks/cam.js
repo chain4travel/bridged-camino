@@ -1511,4 +1511,226 @@ camScope
         }
     });
 
+camScope
+    .task("balance", "Check token balance of an address")
+    .addPositionalParam("address", "Address to check balance for")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Token Balance");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const decimals = await token.decimals();
+            const name = await token.name();
+
+            // Get address type
+            const addressType = await getAddressType(taskArgs.address, provider);
+
+            // Get balance
+            const balance = await token.balanceOf(taskArgs.address);
+            const balanceFormatted = ethers.formatUnits(balance, decimals);
+
+            // Get total supply for context
+            const totalSupply = await token.totalSupply();
+            const totalSupplyFormatted = ethers.formatUnits(totalSupply, decimals);
+
+            // Calculate percentage of total supply
+            let percentageOfSupply = "0";
+            if (totalSupply > 0n) {
+                const percentage = (Number(balance) * 100) / Number(totalSupply);
+                percentageOfSupply = percentage.toFixed(6);
+            }
+
+            subheader("Token Information");
+            log(`Token:       ${name}`, 1, colors.bright);
+            log(`Symbol:      ${symbol}`, 1, colors.cyan);
+            log(`Proxy:       ${proxyAddress}`, 1, colors.cyan);
+            log(`Decimals:    ${decimals}`, 1);
+
+            log();
+            subheader("Address Information");
+            log(`Address:     ${taskArgs.address}`, 1, colors.bright);
+            log(`Type:        ${addressType}`, 1, addressType === "Contract" ? colors.cyan : colors.reset);
+
+            log();
+            subheader("Balance");
+            const balanceColor = balance > 0n ? colors.green : colors.yellow;
+            log(`Balance:     ${balanceFormatted} ${symbol}`, 1, balanceColor);
+            log(`Raw Value:   ${balance.toString()} (wei)`, 1, colors.cyan);
+
+            log();
+            subheader("Supply Context");
+            log(`Total Supply: ${totalSupplyFormatted} ${symbol}`, 1);
+            if (totalSupply > 0n) {
+                log(`% of Supply:  ${percentageOfSupply}%`, 1, colors.cyan);
+            }
+
+            log();
+        } catch (err) {
+            error("Balance check failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("transfer", "Transfer tokens to another address")
+    .addParam("to", "Recipient address")
+    .addParam("amount", "Amount of tokens to transfer (in token units, e.g., 100.5)")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of sender (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Transfer Tokens");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const senderAddress = await signer.getAddress();
+
+            // Get contract instance
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress, signer);
+
+            // Get token info
+            const symbol = await token.symbol();
+            const decimals = await token.decimals();
+            const name = await token.name();
+
+            // Check if contract is paused
+            const isPaused = await token.paused();
+            if (isPaused) {
+                throw new Error("Token contract is paused. Transfers are not allowed while paused.");
+            }
+
+            // Parse amount
+            const amountInWei = ethers.parseUnits(taskArgs.amount, decimals);
+            const amountFormatted = ethers.formatUnits(amountInWei, decimals);
+
+            // Get address types
+            const senderType = await getAddressType(senderAddress, provider);
+            const recipientType = await getAddressType(taskArgs.to, provider);
+
+            // Get current balances
+            const senderBalanceBefore = await token.balanceOf(senderAddress);
+            const recipientBalanceBefore = await token.balanceOf(taskArgs.to);
+
+            // Check if sender has enough balance
+            if (senderBalanceBefore < amountInWei) {
+                throw new Error(
+                    `Insufficient balance.\n` +
+                        `Requested: ${amountFormatted} ${symbol}\n` +
+                        `Available: ${ethers.formatUnits(senderBalanceBefore, decimals)} ${symbol}`,
+                );
+            }
+
+            subheader("Transaction Details");
+            log(`Token:          ${name} (${symbol})`, 1, colors.bright);
+            log(`Token Proxy:    ${proxyAddress}`, 1, colors.cyan);
+            log(`From:           ${senderAddress} (${senderType})`, 1, colors.yellow);
+            log(`To:             ${taskArgs.to} (${recipientType})`, 1, colors.green);
+            log(`Amount:         ${amountFormatted} ${symbol}`, 1, colors.bright + colors.cyan);
+
+            log();
+            subheader("Balances Before");
+            log(
+                `Sender:      ${ethers.formatUnits(senderBalanceBefore, decimals)} ${symbol}`,
+                1,
+                colors.yellow,
+            );
+            log(
+                `Recipient:   ${ethers.formatUnits(recipientBalanceBefore, decimals)} ${symbol}`,
+                1,
+                colors.cyan,
+            );
+
+            // Send transaction
+            log();
+            log("Sending transfer transaction...", 0, colors.cyan);
+            const tx = await token.transfer(taskArgs.to, amountInWei);
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            // Get new balances
+            const senderBalanceAfter = await token.balanceOf(senderAddress);
+            const recipientBalanceAfter = await token.balanceOf(taskArgs.to);
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Transferred ${amountFormatted} ${symbol} to ${taskArgs.to}`, 0);
+
+            log();
+            subheader("Balances After");
+            log(`Sender:      ${ethers.formatUnits(senderBalanceAfter, decimals)} ${symbol}`, 1, colors.green);
+            log(`Recipient:   ${ethers.formatUnits(recipientBalanceAfter, decimals)} ${symbol}`, 1, colors.green);
+
+            log();
+            subheader("Changes");
+            log(
+                `Sender:      -${amountFormatted} ${symbol}`,
+                1,
+                colors.red,
+            );
+            log(
+                `Recipient:   +${amountFormatted} ${symbol}`,
+                1,
+                colors.green,
+            );
+
+            log();
+        } catch (err) {
+            error("Transfer transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
 module.exports = {};
