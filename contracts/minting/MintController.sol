@@ -189,22 +189,23 @@ contract MintController is Controller {
     }
 
     /**
-     * @notice Configure a controller with the given worker (minter)
-     * @dev Overrides Controller.configureController to also set a default ceiling of 0.
-     *      The ceiling defaults to 0 (zero-only controller) for safety.
-     *      Owner must call setControllerCeiling to grant higher allowance permissions.
+     * @notice Configure a controller with the given worker (minter) and allowance ceiling
+     * @dev Extends configureController from parent to also set the allowance ceiling.
+     *      Ceiling values:
+     *      - 0: Controller can only set allowance to 0 (can only disable minters)
+     *      - Any value > 0 and < max: Maximum allowance the controller can assign
+     *      - type(uint256).max: Unlimited
      * @param controller The controller to be configured with a worker
      * @param worker The worker (minter) to be set for the controller
+     * @param ceiling The maximum allowance the controller can assign
      */
-    function configureController(address controller, address worker) public override onlyOwner {
+    function configureController(address controller, address worker, uint256 ceiling) public onlyOwner {
+        // Call parent to configure controller-worker mapping
         super.configureController(controller, worker);
-        // Set default ceiling to 0 (zero-only, safest default)
-        // Owner must explicitly call setControllerCeiling to grant allowance permissions
-        if (controllerCeilings[controller] == 0) {
-            // Only set if not already configured (to avoid resetting an existing ceiling)
-            controllerCeilings[controller] = 0;
-            emit ControllerCeilingUpdated(controller, 0);
-        }
+
+        // Set the ceiling
+        controllerCeilings[controller] = ceiling;
+        emit ControllerCeilingUpdated(controller, ceiling);
     }
 
     /**
