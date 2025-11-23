@@ -80,20 +80,12 @@ describe("MintController", function () {
         // Configure controller1 with minter1 and a reasonable ceiling for testing
         await mintController
             .connect(owner)
-            ["configureController(address,address,uint256)"](
-                controller1.address,
-                minter1.address,
-                ethers.parseEther("10000"),
-            );
+            .configureControllerWithCeiling(controller1.address, minter1.address, ethers.parseEther("10000"));
 
         // Configure controller2 with minter2 and a reasonable ceiling for testing
         await mintController
             .connect(owner)
-            ["configureController(address,address,uint256)"](
-                controller2.address,
-                minter2.address,
-                ethers.parseEther("10000"),
-            );
+            .configureControllerWithCeiling(controller2.address, minter2.address, ethers.parseEther("10000"));
 
         return {
             mintController,
@@ -138,7 +130,7 @@ describe("MintController", function () {
             const mintController = await MintController.deploy(ethers.ZeroAddress, owner.address);
 
             // Configure a controller
-            await mintController.connect(owner)["configureController(address,address,uint256)"](controller1.address, controller1.address, 0);
+            await mintController.connect(owner).configureControllerWithCeiling(controller1.address, controller1.address, 0);
 
             // Trying to call configureMinter should fail because minterManager is not set
             await expect(mintController.connect(controller1).configureMinter(1000)).to.be.reverted; // Will revert when trying to call address(0)
@@ -373,7 +365,7 @@ describe("MintController", function () {
                 await loadFixture(mintControllerWithConfiguredControllersFixture);
 
             // Reconfigure both controllers to manage the same minter (minter1), preserve existing ceiling
-            await mintController.connect(owner)["configureController(address,address,uint256)"](controller2.address, minter1.address, ethers.parseEther("10000"));
+            await mintController.connect(owner).configureControllerWithCeiling(controller2.address, minter1.address, ethers.parseEther("10000"));
 
             // Controller1 sets allowance to 1000
             await mintController.connect(controller1).configureMinter(ethers.parseEther("1000"));
@@ -441,9 +433,7 @@ describe("MintController", function () {
 
                 // Configure controller should emit both events
                 await expect(
-                    mintController
-                        .connect(owner)
-                        ["configureController(address,address,uint256)"](newController.address, newMinter.address, 0),
+                    mintController.connect(owner).configureControllerWithCeiling(newController.address, newMinter.address, 0),
                 )
                     .to.emit(mintController, "ControllerConfigured")
                     .withArgs(newController.address, newMinter.address)
@@ -463,7 +453,7 @@ describe("MintController", function () {
 
                 // Reconfigure the same controller with a different minter and new ceiling
                 const newCeiling = ethers.parseEther("5000");
-                await mintController.connect(owner)["configureController(address,address,uint256)"](controller1.address, minter2.address, newCeiling);
+                await mintController.connect(owner).configureControllerWithCeiling(controller1.address, minter2.address, newCeiling);
 
                 // Ceiling should be updated
                 expect(await mintController.getControllerCeiling(controller1.address)).to.equal(newCeiling);
@@ -543,7 +533,7 @@ describe("MintController", function () {
                 const { mintController, owner, otherAccount } = await loadFixture(deployMintControllerFixture);
 
                 // Configure a new controller with ceiling of 0
-                await mintController.connect(owner)["configureController(address,address,uint256)"](otherAccount.address, otherAccount.address, 0);
+                await mintController.connect(owner).configureControllerWithCeiling(otherAccount.address, otherAccount.address, 0);
 
                 // Ceiling should be 0 as configured
                 expect(await mintController.getControllerCeiling(otherAccount.address)).to.equal(0);
@@ -626,7 +616,7 @@ describe("MintController", function () {
                 );
 
                 // Configure a new controller with ceiling of 0 (zero-only)
-                await mintController.connect(owner)["configureController(address,address,uint256)"](otherAccount.address, otherAccount.address, 0);
+                await mintController.connect(owner).configureControllerWithCeiling(otherAccount.address, otherAccount.address, 0);
 
                 // Ceiling should be 0 (zero-only)
                 expect(await mintController.getControllerCeiling(otherAccount.address)).to.equal(0);
@@ -719,7 +709,7 @@ describe("MintController", function () {
                 );
 
                 // Configure a new controller with ceiling of 0 (zero-only)
-                await mintController.connect(owner)["configureController(address,address,uint256)"](otherAccount.address, otherAccount.address, 0);
+                await mintController.connect(owner).configureControllerWithCeiling(otherAccount.address, otherAccount.address, 0);
 
                 // Ceiling should be 0 (zero-only)
                 expect(await mintController.getControllerCeiling(otherAccount.address)).to.equal(0);
@@ -757,14 +747,14 @@ describe("MintController", function () {
                 const [, , , controller1, disablerController, minter1] = await ethers.getSigners();
 
                 // Configure controller1 with a normal ceiling
-                await mintController.connect(owner)["configureController(address,address,uint256)"](controller1.address, minter1.address, ethers.parseEther("10000"));
+                await mintController.connect(owner).configureControllerWithCeiling(controller1.address, minter1.address, ethers.parseEther("10000"));
 
                 // Configure with normal controller first
                 const initialAllowance = ethers.parseEther("5000");
                 await mintController.connect(controller1).configureMinter(initialAllowance);
 
                 // Create a zero-ceiling controller for the same minter (disabler role)
-                await mintController.connect(owner)["configureController(address,address,uint256)"](disablerController.address, minter1.address, 0);
+                await mintController.connect(owner).configureControllerWithCeiling(disablerController.address, minter1.address, 0);
                 expect(await mintController.getControllerCeiling(disablerController.address)).to.equal(0);
 
                 // Zero-ceiling controller can decrement (but not increment)

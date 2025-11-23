@@ -199,7 +199,7 @@ contract MintController is Controller {
      * @param worker The worker (minter) to be set for the controller
      * @param ceiling The maximum allowance the controller can assign
      */
-    function configureController(address controller, address worker, uint256 ceiling) public onlyOwner {
+    function configureControllerWithCeiling(address controller, address worker, uint256 ceiling) public onlyOwner {
         // Call parent to configure controller-worker mapping
         super.configureController(controller, worker);
 

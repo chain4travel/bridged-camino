@@ -80,20 +80,12 @@ describe("MasterMinter", function () {
         // Configure controller1 with minter1 and a reasonable ceiling for testing
         await masterMinter
             .connect(owner)
-            ["configureController(address,address,uint256)"](
-                controller1.address,
-                minter1.address,
-                ethers.parseEther("10000"),
-            );
+            .configureControllerWithCeiling(controller1.address, minter1.address, ethers.parseEther("10000"));
 
         // Configure controller2 with minter2 and a reasonable ceiling for testing
         await masterMinter
             .connect(owner)
-            ["configureController(address,address,uint256)"](
-                controller2.address,
-                minter2.address,
-                ethers.parseEther("10000"),
-            );
+            .configureControllerWithCeiling(controller2.address, minter2.address, ethers.parseEther("10000"));
 
         return {
             masterMinter,
@@ -124,6 +116,7 @@ describe("MasterMinter", function () {
 
             // Verify it has all MintController functions
             expect(masterMinter.configureController).to.be.a("function");
+            expect(masterMinter.configureControllerWithCeiling).to.be.a("function");
             expect(masterMinter.removeController).to.be.a("function");
             expect(masterMinter.configureMinter).to.be.a("function");
             expect(masterMinter.incrementMinterAllowance).to.be.a("function");
@@ -143,7 +136,7 @@ describe("MasterMinter", function () {
             await expect(
                 masterMinter
                     .connect(owner)
-                    ["configureController(address,address,uint256)"](controller1.address, minter1.address, ceiling),
+                    .configureControllerWithCeiling(controller1.address, minter1.address, ceiling),
             )
                 .to.emit(masterMinter, "ControllerConfigured")
                 .withArgs(controller1.address, minter1.address)
@@ -284,11 +277,7 @@ describe("MasterMinter", function () {
             // 1. Owner configures controller1 to manage minter1 with a ceiling
             await masterMinter
                 .connect(owner)
-                ["configureController(address,address,uint256)"](
-                    controller1.address,
-                    minter1.address,
-                    ethers.parseEther("10000"),
-                );
+                .configureControllerWithCeiling(controller1.address, minter1.address, ethers.parseEther("10000"));
 
             // 2. Controller1 configures minter1 with initial allowance
             const initialAllowance = ethers.parseEther("1000");
