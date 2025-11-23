@@ -594,15 +594,6 @@ _One owner manages many controllers. Each controller manages one worker.
 Workers may be reused across different controllers.
 This is a modernized version of USDC's Controller contract using custom errors._
 
-### controllers
-
-```solidity
-mapping(address => address) controllers
-```
-
-_A controller manages a single worker address.
-controllers[controller] = worker_
-
 ### ControllerConfigured
 
 ```solidity
@@ -710,6 +701,76 @@ Gets the worker address managed by a controller
 | ---- | ------- | ------------------------------------------------------------ |
 | [0]  | address | The worker address (address(0) if controller not configured) |
 
+### \_getWorker
+
+```solidity
+function _getWorker(address controller) internal view returns (address)
+```
+
+_Internal function to get the worker address for a controller_
+
+#### Parameters
+
+| Name       | Type    | Description            |
+| ---------- | ------- | ---------------------- |
+| controller | address | The controller address |
+
+#### Return Values
+
+| Name | Type    | Description                                                  |
+| ---- | ------- | ------------------------------------------------------------ |
+| [0]  | address | The worker address (address(0) if controller not configured) |
+
+### getControllerCount
+
+```solidity
+function getControllerCount() external view returns (uint256)
+```
+
+Gets the total number of configured controllers
+
+#### Return Values
+
+| Name | Type    | Description              |
+| ---- | ------- | ------------------------ |
+| [0]  | uint256 | The count of controllers |
+
+### getControllerAt
+
+```solidity
+function getControllerAt(uint256 index) external view returns (address controller, address worker)
+```
+
+Gets the controller and worker at a specific index
+
+#### Parameters
+
+| Name  | Type    | Description        |
+| ----- | ------- | ------------------ |
+| index | uint256 | The index to query |
+
+#### Return Values
+
+| Name       | Type    | Description                                       |
+| ---------- | ------- | ------------------------------------------------- |
+| controller | address | The controller address at the given index         |
+| worker     | address | The worker address associated with the controller |
+
+### getAllControllers
+
+```solidity
+function getAllControllers() external view returns (address[] controllerAddresses, address[] workerAddresses)
+```
+
+Gets all controllers and their associated workers
+
+#### Return Values
+
+| Name                | Type      | Description                       |
+| ------------------- | --------- | --------------------------------- |
+| controllerAddresses | address[] | Array of all controller addresses |
+| workerAddresses     | address[] | Array of all worker addresses     |
+
 ### configureController
 
 ```solidity
@@ -733,7 +794,7 @@ _The worker must be a non-zero address. To disable a controller, use removeContr
 function removeController(address controller) public
 ```
 
-Disables a controller by setting its worker to address(0)
+Disables a controller by removing it from the enumerable map
 
 #### Parameters
 
