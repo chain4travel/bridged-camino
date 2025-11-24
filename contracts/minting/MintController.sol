@@ -26,6 +26,14 @@ contract MintController is Controller {
      */
     IMinterManagement internal minterManager;
 
+    /**
+     * @dev Maximum allowance that each controller can assign to its minter.
+     *      When configureController is called, defaults to 0 (zero-only controller).
+     *      Owner must explicitly set ceiling via setControllerCeiling.
+     *      Special value: type(uint256).max means unlimited.
+     */
+    mapping(address controller => uint256 ceiling) internal controllerCeilings;
+
     /***************************************************
      *                    EVENTS                       *
      ***************************************************/
@@ -80,6 +88,13 @@ contract MintController is Controller {
         uint256 newAllowance
     );
 
+    /**
+     * @notice Emitted when a controller's allowance ceiling is updated
+     * @param controller The address of the controller
+     * @param ceiling The new ceiling value (type(uint256).max means unlimited)
+     */
+    event ControllerCeilingUpdated(address indexed controller, uint256 ceiling);
+
     /***************************************************
      *                    ERRORS                       *
      ***************************************************/
@@ -104,6 +119,13 @@ contract MintController is Controller {
      * @param minter The minter address that is not active
      */
     error MinterNotActive(address minter);
+
+    /**
+     * @notice Thrown when trying to set an allowance that exceeds the controller's ceiling
+     * @param requestedAllowance The allowance that was requested
+     * @param ceiling The maximum allowed ceiling for this controller
+     */
+    error AllowanceExceedsCeiling(uint256 requestedAllowance, uint256 ceiling);
 
     /***************************************************
      *                CONSTRUCTOR                      *
@@ -137,6 +159,15 @@ contract MintController is Controller {
         return minterManager;
     }
 
+    /**
+     * @notice Gets the allowance ceiling for a controller
+     * @param controller The address of the controller
+     * @return The ceiling value (type(uint256).max means unlimited)
+     */
+    function getControllerCeiling(address controller) external view returns (uint256) {
+        return controllerCeilings[controller];
+    }
+
     /***************************************************
      *           ONLY OWNER FUNCTIONS                  *
      ***************************************************/
@@ -157,6 +188,41 @@ contract MintController is Controller {
         minterManager = IMinterManagement(newMinterManager);
     }
 
+    /**
+     * @notice Configure a controller with the given worker (minter) and allowance ceiling
+     * @dev Extends configureController from parent to also set the allowance ceiling.
+     *      Ceiling values:
+     *      - 0: Controller can only set allowance to 0 (can only disable minters)
+     *      - Any value > 0 and < max: Maximum allowance the controller can assign
+     *      - type(uint256).max: Unlimited
+     * @param controller The controller to be configured with a worker
+     * @param worker The worker (minter) to be set for the controller
+     * @param ceiling The maximum allowance the controller can assign
+     */
+    function configureControllerWithCeiling(address controller, address worker, uint256 ceiling) public onlyOwner {
+        // Call parent to configure controller-worker mapping
+        configureController(controller, worker);
+
+        // Set the ceiling
+        controllerCeilings[controller] = ceiling;
+        emit ControllerCeilingUpdated(controller, ceiling);
+    }
+
+    /**
+     * @notice Sets the allowance ceiling for a controller
+     * @dev Ceiling values:
+     *      - 0: Controller can only set allowance to 0 (can only disable minters)
+     *      - Any value > 0 and < max: Maximum allowance the controller can assign
+     *      - type(uint256).max: Unlimited
+     *      Only the owner can set controller ceilings.
+     * @param controller The address of the controller
+     * @param ceiling The maximum allowance the controller can assign
+     */
+    function setControllerCeiling(address controller, uint256 ceiling) public onlyOwner {
+        controllerCeilings[controller] = ceiling;
+        emit ControllerCeilingUpdated(controller, ceiling);
+    }
+
     /***************************************************
      *         ONLY CONTROLLER FUNCTIONS               *
      ***************************************************/
@@ -166,7 +232,7 @@ contract MintController is Controller {
      * @dev Can only be called by an active controller
      */
     function removeMinter() public onlyController {
-        address minter = controllers[msg.sender];
+        address minter = _getWorker(msg.sender);
         emit MinterRemoved(msg.sender, minter);
         minterManager.removeMinter(minter);
     }
@@ -177,7 +243,8 @@ contract MintController is Controller {
      * @param newAllowance New allowance to be set for minter
      */
     function configureMinter(uint256 newAllowance) public onlyController {
-        address minter = controllers[msg.sender];
+        _validateAllowanceCeiling(msg.sender, newAllowance);
+        address minter = _getWorker(msg.sender);
         emit MinterConfigured(msg.sender, minter, newAllowance);
         _setMinterAllowance(minter, newAllowance);
     }
@@ -193,13 +260,15 @@ contract MintController is Controller {
             revert AllowanceIncrementZero();
         }
 
-        address minter = controllers[msg.sender];
+        address minter = _getWorker(msg.sender);
         if (!minterManager.isMinter(minter)) {
             revert MinterNotActive(minter);
         }
 
         uint256 currentAllowance = minterManager.minterAllowance(minter);
         uint256 newAllowance = currentAllowance + allowanceIncrement;
+
+        _validateAllowanceCeiling(msg.sender, newAllowance);
 
         emit MinterAllowanceIncremented(msg.sender, minter, allowanceIncrement, newAllowance);
         _setMinterAllowance(minter, newAllowance);
@@ -218,7 +287,7 @@ contract MintController is Controller {
             revert AllowanceDecrementZero();
         }
 
-        address minter = controllers[msg.sender];
+        address minter = _getWorker(msg.sender);
         if (!minterManager.isMinter(minter)) {
             revert MinterNotActive(minter);
         }
@@ -236,6 +305,27 @@ contract MintController is Controller {
     /***************************************************
      *           INTERNAL FUNCTIONS                    *
      ***************************************************/
+
+    /**
+     * @notice Validates that the requested allowance does not exceed the controller's ceiling
+     * @dev Ceiling of type(uint256).max means unlimited (no validation).
+     *      Any other ceiling value is enforced.
+     * @param controller The controller address to check
+     * @param newAllowance The allowance to validate
+     */
+    function _validateAllowanceCeiling(address controller, uint256 newAllowance) internal view {
+        uint256 ceiling = controllerCeilings[controller];
+
+        // Max ceiling means unlimited, no validation needed
+        if (ceiling == type(uint256).max) {
+            return;
+        }
+
+        // Enforce ceiling
+        if (newAllowance > ceiling) {
+            revert AllowanceExceedsCeiling(newAllowance, ceiling);
+        }
+    }
 
     /**
      * @notice Uses the IMinterManagement interface to enable the minter and set its allowance

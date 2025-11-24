@@ -77,11 +77,15 @@ describe("MasterMinter", function () {
             recipient,
         } = await loadFixture(deployMasterMinterFixture);
 
-        // Configure controller1 with minter1
-        await masterMinter.connect(owner).configureController(controller1.address, minter1.address);
+        // Configure controller1 with minter1 and a reasonable ceiling for testing
+        await masterMinter
+            .connect(owner)
+            .configureControllerWithCeiling(controller1.address, minter1.address, ethers.parseEther("10000"));
 
-        // Configure controller2 with minter2
-        await masterMinter.connect(owner).configureController(controller2.address, minter2.address);
+        // Configure controller2 with minter2 and a reasonable ceiling for testing
+        await masterMinter
+            .connect(owner)
+            .configureControllerWithCeiling(controller2.address, minter2.address, ethers.parseEther("10000"));
 
         return {
             masterMinter,
@@ -112,6 +116,7 @@ describe("MasterMinter", function () {
 
             // Verify it has all MintController functions
             expect(masterMinter.configureController).to.be.a("function");
+            expect(masterMinter.configureControllerWithCeiling).to.be.a("function");
             expect(masterMinter.removeController).to.be.a("function");
             expect(masterMinter.configureMinter).to.be.a("function");
             expect(masterMinter.incrementMinterAllowance).to.be.a("function");
@@ -126,11 +131,20 @@ describe("MasterMinter", function () {
         it("Should allow owner to configure controllers", async function () {
             const { masterMinter, owner, controller1, minter1 } = await loadFixture(deployMasterMinterFixture);
 
-            await expect(masterMinter.connect(owner).configureController(controller1.address, minter1.address))
+            const ceiling = ethers.parseEther("5000");
+
+            await expect(
+                masterMinter
+                    .connect(owner)
+                    .configureControllerWithCeiling(controller1.address, minter1.address, ceiling),
+            )
                 .to.emit(masterMinter, "ControllerConfigured")
-                .withArgs(controller1.address, minter1.address);
+                .withArgs(controller1.address, minter1.address)
+                .and.to.emit(masterMinter, "ControllerCeilingUpdated")
+                .withArgs(controller1.address, ceiling);
 
             expect(await masterMinter.getWorker(controller1.address)).to.equal(minter1.address);
+            expect(await masterMinter.getControllerCeiling(controller1.address)).to.equal(ceiling);
         });
 
         it("Should allow owner to remove controllers", async function () {
@@ -260,8 +274,10 @@ describe("MasterMinter", function () {
             const { masterMinter, minterManager, owner, controller1, minter1, recipient } =
                 await loadFixture(deployMasterMinterFixture);
 
-            // 1. Owner configures controller1 to manage minter1
-            await masterMinter.connect(owner).configureController(controller1.address, minter1.address);
+            // 1. Owner configures controller1 to manage minter1 with a ceiling
+            await masterMinter
+                .connect(owner)
+                .configureControllerWithCeiling(controller1.address, minter1.address, ethers.parseEther("10000"));
 
             // 2. Controller1 configures minter1 with initial allowance
             const initialAllowance = ethers.parseEther("1000");

@@ -594,15 +594,6 @@ _One owner manages many controllers. Each controller manages one worker.
 Workers may be reused across different controllers.
 This is a modernized version of USDC's Controller contract using custom errors._
 
-### controllers
-
-```solidity
-mapping(address => address) controllers
-```
-
-_A controller manages a single worker address.
-controllers[controller] = worker_
-
 ### ControllerConfigured
 
 ```solidity
@@ -710,6 +701,76 @@ Gets the worker address managed by a controller
 | ---- | ------- | ------------------------------------------------------------ |
 | [0]  | address | The worker address (address(0) if controller not configured) |
 
+### \_getWorker
+
+```solidity
+function _getWorker(address controller) internal view returns (address)
+```
+
+_Internal function to get the worker address for a controller_
+
+#### Parameters
+
+| Name       | Type    | Description            |
+| ---------- | ------- | ---------------------- |
+| controller | address | The controller address |
+
+#### Return Values
+
+| Name | Type    | Description                                                  |
+| ---- | ------- | ------------------------------------------------------------ |
+| [0]  | address | The worker address (address(0) if controller not configured) |
+
+### getControllerCount
+
+```solidity
+function getControllerCount() external view returns (uint256)
+```
+
+Gets the total number of configured controllers
+
+#### Return Values
+
+| Name | Type    | Description              |
+| ---- | ------- | ------------------------ |
+| [0]  | uint256 | The count of controllers |
+
+### getControllerAt
+
+```solidity
+function getControllerAt(uint256 index) external view returns (address controller, address worker)
+```
+
+Gets the controller and worker at a specific index
+
+#### Parameters
+
+| Name  | Type    | Description        |
+| ----- | ------- | ------------------ |
+| index | uint256 | The index to query |
+
+#### Return Values
+
+| Name       | Type    | Description                                       |
+| ---------- | ------- | ------------------------------------------------- |
+| controller | address | The controller address at the given index         |
+| worker     | address | The worker address associated with the controller |
+
+### getAllControllers
+
+```solidity
+function getAllControllers() external view returns (address[] controllerAddresses, address[] workerAddresses)
+```
+
+Gets all controllers and their associated workers
+
+#### Return Values
+
+| Name                | Type      | Description                       |
+| ------------------- | --------- | --------------------------------- |
+| controllerAddresses | address[] | Array of all controller addresses |
+| workerAddresses     | address[] | Array of all worker addresses     |
+
 ### configureController
 
 ```solidity
@@ -733,7 +794,7 @@ _The worker must be a non-zero address. To disable a controller, use removeContr
 function removeController(address controller) public
 ```
 
-Disables a controller by setting its worker to address(0)
+Disables a controller by removing it from the enumerable map
 
 #### Parameters
 
@@ -786,6 +847,17 @@ contract IMinterManagement minterManager
 
 _MintController calls the minterManager to execute/record minter
 management tasks, as well as to query the status of a minter address._
+
+### controllerCeilings
+
+```solidity
+mapping(address => uint256) controllerCeilings
+```
+
+_Maximum allowance that each controller can assign to its minter.
+When configureController is called, defaults to 0 (zero-only controller).
+Owner must explicitly set ceiling via setControllerCeiling.
+Special value: type(uint256).max means unlimited._
 
 ### MinterManagerSet
 
@@ -867,6 +939,21 @@ Emitted when a minter's allowance is decremented
 | decrement    | uint256 | The amount the allowance was decremented by |
 | newAllowance | uint256 | The new total allowance                     |
 
+### ControllerCeilingUpdated
+
+```solidity
+event ControllerCeilingUpdated(address controller, uint256 ceiling)
+```
+
+Emitted when a controller's allowance ceiling is updated
+
+#### Parameters
+
+| Name       | Type    | Description                                               |
+| ---------- | ------- | --------------------------------------------------------- |
+| controller | address | The address of the controller                             |
+| ceiling    | uint256 | The new ceiling value (type(uint256).max means unlimited) |
+
 ### MinterManagerZeroAddress
 
 ```solidity
@@ -905,6 +992,21 @@ Thrown when trying to increment/decrement allowance for an inactive minter
 | ------ | ------- | ------------------------------------- |
 | minter | address | The minter address that is not active |
 
+### AllowanceExceedsCeiling
+
+```solidity
+error AllowanceExceedsCeiling(uint256 requestedAllowance, uint256 ceiling)
+```
+
+Thrown when trying to set an allowance that exceeds the controller's ceiling
+
+#### Parameters
+
+| Name               | Type    | Description                                     |
+| ------------------ | ------- | ----------------------------------------------- |
+| requestedAllowance | uint256 | The allowance that was requested                |
+| ceiling            | uint256 | The maximum allowed ceiling for this controller |
+
 ### constructor
 
 ```solidity
@@ -938,6 +1040,26 @@ Gets the minter manager
 | ---- | -------------------------- | --------------------------- |
 | [0]  | contract IMinterManagement | The minter manager contract |
 
+### getControllerCeiling
+
+```solidity
+function getControllerCeiling(address controller) external view returns (uint256)
+```
+
+Gets the allowance ceiling for a controller
+
+#### Parameters
+
+| Name       | Type    | Description                   |
+| ---------- | ------- | ----------------------------- |
+| controller | address | The address of the controller |
+
+#### Return Values
+
+| Name | Type    | Description                                           |
+| ---- | ------- | ----------------------------------------------------- |
+| [0]  | uint256 | The ceiling value (type(uint256).max means unlimited) |
+
 ### setMinterManager
 
 ```solidity
@@ -953,6 +1075,43 @@ _This function serves two purposes: 1. Initial setup: If deployed with address(0
 | Name             | Type    | Description                                    |
 | ---------------- | ------- | ---------------------------------------------- |
 | newMinterManager | address | The address of the new minter manager contract |
+
+### configureControllerWithCeiling
+
+```solidity
+function configureControllerWithCeiling(address controller, address worker, uint256 ceiling) public
+```
+
+Configure a controller with the given worker (minter) and allowance ceiling
+
+_Extends configureController from parent to also set the allowance ceiling.
+Ceiling values: - 0: Controller can only set allowance to 0 (can only disable minters) - Any value > 0 and < max: Maximum allowance the controller can assign - type(uint256).max: Unlimited_
+
+#### Parameters
+
+| Name       | Type    | Description                                      |
+| ---------- | ------- | ------------------------------------------------ |
+| controller | address | The controller to be configured with a worker    |
+| worker     | address | The worker (minter) to be set for the controller |
+| ceiling    | uint256 | The maximum allowance the controller can assign  |
+
+### setControllerCeiling
+
+```solidity
+function setControllerCeiling(address controller, uint256 ceiling) public
+```
+
+Sets the allowance ceiling for a controller
+
+_Ceiling values: - 0: Controller can only set allowance to 0 (can only disable minters) - Any value > 0 and < max: Maximum allowance the controller can assign - type(uint256).max: Unlimited
+Only the owner can set controller ceilings._
+
+#### Parameters
+
+| Name       | Type    | Description                                     |
+| ---------- | ------- | ----------------------------------------------- |
+| controller | address | The address of the controller                   |
+| ceiling    | uint256 | The maximum allowance the controller can assign |
 
 ### removeMinter
 
@@ -1015,6 +1174,24 @@ Can only be called by an active controller._
 | Name               | Type    | Description                              |
 | ------------------ | ------- | ---------------------------------------- |
 | allowanceDecrement | uint256 | The amount to decrement the allowance by |
+
+### \_validateAllowanceCeiling
+
+```solidity
+function _validateAllowanceCeiling(address controller, uint256 newAllowance) internal view
+```
+
+Validates that the requested allowance does not exceed the controller's ceiling
+
+_Ceiling of type(uint256).max means unlimited (no validation).
+Any other ceiling value is enforced._
+
+#### Parameters
+
+| Name         | Type    | Description                     |
+| ------------ | ------- | ------------------------------- |
+| controller   | address | The controller address to check |
+| newAllowance | uint256 | The allowance to validate       |
 
 ### \_setMinterAllowance
 

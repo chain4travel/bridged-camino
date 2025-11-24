@@ -545,14 +545,14 @@ camScope
 camScope
     .task("status", "Display current state of deployed BridgedCaminoV1 token and MasterMinter")
     .addOptionalParam("deploymentId", "Deployment ID to check status for")
-    .addOptionalParam("fromBlock", "Starting block for event scanning (default: deployment block)")
-    .addOptionalParam("toBlock", "Ending block for event scanning (default: latest)")
+    .addOptionalParam("fromBlock", "Starting block for event scanning (only used with --scan-events)")
+    .addOptionalParam("toBlock", "Ending block for event scanning (only used with --scan-events)")
     .addOptionalParam(
         "blockChunkSize",
-        "Max blocks per query for event scanning (default: 5000, set to 0 to disable chunking)",
+        "Max blocks per query for event scanning (default: 5000, only used with --scan-events)",
         "5000",
     )
-    .addFlag("skipEvents", "Skip event scanning for controllers (faster, less complete)")
+    .addFlag("scanEvents", "Scan events from RPC instead of enumerating from contract (slower)")
     .setAction(async (taskArgs, hre) => {
         const { ethers, network } = hre;
 
@@ -729,13 +729,14 @@ camScope
             log();
             info(`Total Allowance: ${colors.bright} ${ethers.formatUnits(totalAllowance, decimals)} ${symbol}`, 1);
 
-            // Try to enumerate controllers via events
+            // Enumerate controllers
             subheader("Controllers Information");
 
-            if (taskArgs.skipEvents) {
-                warning("Event scanning skipped (--skip-events flag set)", 0);
-                info("Controllers cannot be enumerated without event scanning.", 0);
-            } else {
+            if (taskArgs.scanEvents) {
+                // Legacy mode: Scan events from RPC (slower, may hit rate limits)
+                info("Using event scanning mode (--scan-events flag set)", 0);
+                log();
+
                 // Determine deployment block from journal
                 let deploymentBlock = 0;
                 try {
@@ -858,6 +859,24 @@ camScope
                             );
                             log(`Worker/Minter: ${worker} (${workerType})`, 3, colors.green);
 
+                            // Get controller's ceiling
+                            try {
+                                const ceiling = await masterMinter.getControllerCeiling(controller);
+                                if (ceiling === ethers.MaxUint256) {
+                                    log(`Ceiling:       Unlimited (MaxUint256)`, 3, colors.magenta);
+                                } else if (ceiling === 0n) {
+                                    log(`Ceiling:       0 ${symbol} (zero-only/disabler)`, 3, colors.yellow);
+                                } else {
+                                    log(
+                                        `Ceiling:       ${ethers.formatUnits(ceiling, decimals)} ${symbol}`,
+                                        3,
+                                        colors.magenta,
+                                    );
+                                }
+                            } catch (e) {
+                                warning(`Could not read controller ceiling: ${e.message}`, 3);
+                            }
+
                             // Get worker's allowance if it's a minter
                             try {
                                 const workerIsMinter = await token.isMinter(worker);
@@ -875,26 +894,85 @@ camScope
                         }
                     }
                 } catch (e) {
-                    error(`Could not enumerate controllers: ${e.message}`, 0);
+                    error(`Could not enumerate controllers via events: ${e.message}`, 0);
 
                     if (e.message.includes("10000 blocks") || e.message.includes("block range")) {
                         log();
                         warning("Your RPC provider has block range limits. Try one of these solutions:", 0);
                         log("1. Use --from-block to start from a recent block:", 1, colors.cyan);
                         log(
-                            `yarn hardhat cam status --network ${network.name} --from-block ${toBlock - 10000}`,
+                            `yarn hardhat cam status --network ${network.name} --from-block ${(await provider.getBlockNumber()) - 10000}`,
                             2,
                             colors.cyan,
                         );
                         log("2. Use a smaller chunk size:", 1, colors.cyan);
                         log(
-                            `yarn hardhat cam status --network ${network.name} --block-chunk-size 2000`,
+                            `yarn hardhat cam status --network ${network.name} --scan-events --block-chunk-size 2000`,
                             2,
                             colors.cyan,
                         );
-                        log("3. Skip event scanning:", 1, colors.cyan);
-                        log(`yarn hardhat cam status --network ${network.name} --skip-events`, 2, colors.cyan);
+                        log("3. Use default enumeration (remove --scan-events flag):", 1, colors.cyan);
+                        log(`yarn hardhat cam status --network ${network.name}`, 2, colors.cyan);
                     }
+                }
+            } else {
+                // Default mode: Enumerate from contract (faster, more reliable)
+                try {
+                    const [controllerAddresses, workerAddresses] = await masterMinter.getAllControllers();
+
+                    if (controllerAddresses.length === 0) {
+                        warning("No active controllers found", 0);
+                        info("This is normal if no controllers have been configured yet.", 0);
+                    } else {
+                        log(`Active Controllers: ${controllerAddresses.length}`, 1, colors.bright);
+                        log();
+
+                        for (let i = 0; i < controllerAddresses.length; i++) {
+                            const controller = controllerAddresses[i];
+                            const worker = workerAddresses[i];
+
+                            const controllerType = await getAddressType(controller, provider);
+                            const workerType = await getAddressType(worker, provider);
+
+                            log(`[${i}] Controller: ${controller} (${controllerType})`, 1, colors.bright + colors.cyan);
+                            log(`Worker/Minter: ${worker} (${workerType})`, 3, colors.green);
+
+                            // Get controller's ceiling
+                            try {
+                                const ceiling = await masterMinter.getControllerCeiling(controller);
+                                if (ceiling === ethers.MaxUint256) {
+                                    log(`Ceiling:       Unlimited (MaxUint256)`, 3, colors.magenta);
+                                } else if (ceiling === 0n) {
+                                    log(`Ceiling:       0 ${symbol} (zero-only/disabler)`, 3, colors.yellow);
+                                } else {
+                                    log(
+                                        `Ceiling:       ${ethers.formatUnits(ceiling, decimals)} ${symbol}`,
+                                        3,
+                                        colors.magenta,
+                                    );
+                                }
+                            } catch (e) {
+                                warning(`Could not read controller ceiling: ${e.message}`, 3);
+                            }
+
+                            // Get worker's allowance if it's a minter
+                            try {
+                                const workerIsMinter = await token.isMinter(worker);
+                                if (workerIsMinter) {
+                                    const workerAllowance = await token.minterAllowance(worker);
+                                    log(`Allowance:     ${ethers.formatUnits(workerAllowance, decimals)} ${symbol}`, 3);
+                                } else {
+                                    warning(`Worker is not an active minter (configure minter not called?)`, 3);
+                                }
+                            } catch (e) {
+                                warning(`Could not read worker status: ${e.message}`, 3);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    error(`Could not enumerate controllers from contract: ${e.message}`, 0);
+                    info("Try using --scan-events flag to enumerate via event scanning instead.", 0);
+                    error(e.stack, 0);
                 }
             }
 
@@ -923,9 +1001,13 @@ camScope
     });
 
 camScope
-    .task("configure-controller", "Configure a controller and its worker/minter (MasterMinter owner only)")
+    .task(
+        "configure-controller",
+        "Configure a controller with its worker/minter and allowance ceiling (MasterMinter owner only)",
+    )
     .addParam("controller", "Controller address")
     .addParam("worker", "Worker/minter address managed by the controller")
+    .addParam("ceiling", "Maximum allowance ceiling (use 'max' for unlimited, or amount in ether units)")
     .addOptionalParam("deploymentId", "Deployment ID")
     .addOptionalParam("privateKey", "Private key of MasterMinter owner (prompted if not provided)")
     .setAction(async (taskArgs, hre) => {
@@ -951,11 +1033,24 @@ camScope
             const signer = await getSignerFromPrivateKey(privateKey, ethers);
             const signerAddress = await signer.getAddress();
 
+            // Parse ceiling parameter
+            let ceiling;
+            if (taskArgs.ceiling.toLowerCase() === "max") {
+                ceiling = ethers.MaxUint256;
+            } else {
+                ceiling = ethers.parseEther(taskArgs.ceiling);
+            }
+
             subheader("Transaction Details");
             log(`MasterMinter:   ${masterMinterAddress}`, 1, colors.bright);
             log(`Signer:         ${signerAddress}`, 1, colors.bright);
             log(`Controller:     ${taskArgs.controller}`, 1, colors.cyan);
             log(`Worker/Minter:  ${taskArgs.worker}`, 1, colors.cyan);
+            log(
+                `Ceiling:        ${taskArgs.ceiling === "max" ? "Unlimited (MaxUint256)" : `${taskArgs.ceiling} tokens`}`,
+                1,
+                colors.cyan,
+            );
 
             // Get contract instance
             const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress, signer);
@@ -971,7 +1066,7 @@ camScope
             // Send transaction
             log();
             log("Sending transaction...", 0, colors.cyan);
-            const tx = await masterMinter.configureController(taskArgs.controller, taskArgs.worker);
+            const tx = await masterMinter.configureControllerWithCeiling(taskArgs.controller, taskArgs.worker, ceiling);
             info(`Transaction hash: ${tx.hash}`, 0);
 
             log("Waiting for confirmation...", 0, colors.cyan);
@@ -980,7 +1075,116 @@ camScope
             header("Transaction Confirmed");
             success(`Block number: ${receipt.blockNumber}`, 0);
             success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
-            success(`Controller ${taskArgs.controller} configured with worker ${taskArgs.worker}`, 0);
+            success(
+                `Controller ${taskArgs.controller} configured with worker ${taskArgs.worker} and ceiling ${taskArgs.ceiling}`,
+                0,
+            );
+
+            log();
+        } catch (err) {
+            error("Transaction failed!", 0);
+            error(err.message, 0);
+
+            if (err.stack) {
+                log();
+                log("Stack trace:", 0, colors.red);
+                console.error(err.stack);
+            }
+
+            process.exit(1);
+        }
+    });
+
+camScope
+    .task("set-controller-ceiling", "Update a controller's allowance ceiling (MasterMinter owner only)")
+    .addParam("controller", "Controller address")
+    .addParam("ceiling", "New maximum allowance ceiling (use 'max' for unlimited, or amount in ether units)")
+    .addOptionalParam("deploymentId", "Deployment ID")
+    .addOptionalParam("privateKey", "Private key of MasterMinter owner (prompted if not provided)")
+    .setAction(async (taskArgs, hre) => {
+        const { ethers, network } = hre;
+
+        try {
+            header("Set Controller Ceiling");
+
+            // Get network info
+            const provider = ethers.provider;
+            const networkInfo = await provider.getNetwork();
+            const chainId = networkInfo.chainId;
+            const deploymentId = taskArgs.deploymentId || `chain-${chainId}`;
+
+            info(`Network: ${network.name} (Chain ID: ${chainId})`, 0);
+            info(`Deployment ID: ${deploymentId}`, 0);
+
+            // Load deployment
+            const { proxyAddress, masterMinterAddress } = await loadDeployment(deploymentId, ethers);
+
+            // Get private key
+            const privateKey = await getPrivateKey(taskArgs);
+            const signer = await getSignerFromPrivateKey(privateKey, ethers);
+            const signerAddress = await signer.getAddress();
+
+            // Get token info for display
+            const token = await ethers.getContractAt("BridgedCaminoV1", proxyAddress);
+            const symbol = await token.symbol();
+            const decimals = await token.decimals();
+
+            // Parse ceiling parameter
+            let ceiling;
+            if (taskArgs.ceiling.toLowerCase() === "max") {
+                ceiling = ethers.MaxUint256;
+            } else {
+                ceiling = ethers.parseEther(taskArgs.ceiling);
+            }
+
+            // Get contract instance
+            const masterMinter = await ethers.getContractAt("MasterMinter", masterMinterAddress, signer);
+
+            // Check if signer is owner
+            const owner = await masterMinter.owner();
+            if (owner.toLowerCase() !== signerAddress.toLowerCase()) {
+                throw new Error(`Signer ${signerAddress} is not the MasterMinter owner.\nOwner is: ${owner}`);
+            }
+
+            // Get current ceiling for comparison
+            const currentCeiling = await masterMinter.getControllerCeiling(taskArgs.controller);
+
+            subheader("Transaction Details");
+            log(`MasterMinter:     ${masterMinterAddress}`, 1, colors.bright);
+            log(`Signer:           ${signerAddress}`, 1, colors.bright);
+            log(`Controller:       ${taskArgs.controller}`, 1, colors.cyan);
+
+            // Display current ceiling
+            if (currentCeiling === ethers.MaxUint256) {
+                log(`Current Ceiling:  Unlimited (MaxUint256)`, 1, colors.yellow);
+            } else if (currentCeiling === 0n) {
+                log(`Current Ceiling:  0 ${symbol} (zero-only)`, 1, colors.yellow);
+            } else {
+                log(`Current Ceiling:  ${ethers.formatUnits(currentCeiling, decimals)} ${symbol}`, 1, colors.yellow);
+            }
+
+            // Display new ceiling
+            log(
+                `New Ceiling:      ${taskArgs.ceiling === "max" ? "Unlimited (MaxUint256)" : `${taskArgs.ceiling} ${symbol}`}`,
+                1,
+                colors.green,
+            );
+
+            success(`Signer is the MasterMinter owner`, 0);
+
+            // Send transaction
+            log();
+            log("Sending transaction...", 0, colors.cyan);
+            const tx = await masterMinter.setControllerCeiling(taskArgs.controller, ceiling);
+            info(`Transaction hash: ${tx.hash}`, 0);
+
+            log("Waiting for confirmation...", 0, colors.cyan);
+            const receipt = await tx.wait();
+
+            header("Transaction Confirmed");
+            success(`Block number: ${receipt.blockNumber}`, 0);
+            success(`Gas used: ${receipt.gasUsed.toString()}`, 0);
+            success(`Controller ${taskArgs.controller} ceiling updated to ${taskArgs.ceiling}`, 0);
 
             log();
         } catch (err) {
@@ -1118,11 +1322,33 @@ camScope
             // Parse allowance
             const allowanceWei = ethers.parseUnits(taskArgs.allowance, decimals);
 
+            // Get controller's ceiling for validation
+            const ceiling = await masterMinter.getControllerCeiling(controllerAddress);
+
             subheader("Transaction Details");
             log(`MasterMinter: ${masterMinterAddress}`, 1, colors.bright);
             log(`Controller:   ${controllerAddress}`, 1, colors.bright);
             log(`Worker:       ${worker}`, 1, colors.cyan);
             log(`New Allowance: ${ethers.formatUnits(allowanceWei, decimals)} ${symbol}`, 1, colors.cyan);
+
+            // Display ceiling info
+            if (ceiling === ethers.MaxUint256) {
+                log(`Ceiling:       Unlimited`, 1, colors.magenta);
+            } else if (ceiling === 0n) {
+                log(`Ceiling:       0 ${symbol} (zero-only)`, 1, colors.yellow);
+            } else {
+                log(`Ceiling:       ${ethers.formatUnits(ceiling, decimals)} ${symbol}`, 1, colors.magenta);
+            }
+
+            // Pre-check ceiling
+            if (ceiling !== ethers.MaxUint256 && allowanceWei > ceiling) {
+                throw new Error(
+                    `Allowance exceeds controller ceiling!\n` +
+                        `Requested: ${ethers.formatUnits(allowanceWei, decimals)} ${symbol}\n` +
+                        `Ceiling:   ${ethers.formatUnits(ceiling, decimals)} ${symbol}\n\n` +
+                        `The controller's allowance ceiling must be increased by the MasterMinter owner first.`,
+                );
+            }
 
             // Send transaction
             log();
@@ -1144,7 +1370,6 @@ camScope
             log();
         } catch (err) {
             error("Transaction failed!", 0);
-            error(err.message, 0);
 
             if (err.stack) {
                 log();
@@ -2282,6 +2507,9 @@ camScope
             const newAllowance = currentAllowance + incrementInWei;
             const newAllowanceFormatted = ethers.formatUnits(newAllowance, decimals);
 
+            // Get controller's ceiling for validation
+            const ceiling = await masterMinter.getControllerCeiling(controllerAddress);
+
             // Get address types
             const workerType = await getAddressType(worker, provider);
 
@@ -2293,6 +2521,27 @@ camScope
             log(`Current Allowance: ${currentAllowanceFormatted} ${symbol}`, 1, colors.yellow);
             log(`Increment:         +${incrementFormatted} ${symbol}`, 1, colors.cyan);
             log(`New Allowance:     ${newAllowanceFormatted} ${symbol}`, 1, colors.green);
+
+            // Display ceiling info
+            if (ceiling === ethers.MaxUint256) {
+                log(`Ceiling:           Unlimited`, 1, colors.magenta);
+            } else if (ceiling === 0n) {
+                log(`Ceiling:           0 ${symbol} (zero-only)`, 1, colors.yellow);
+            } else {
+                log(`Ceiling:           ${ethers.formatUnits(ceiling, decimals)} ${symbol}`, 1, colors.magenta);
+            }
+
+            // Pre-check ceiling
+            if (ceiling !== ethers.MaxUint256 && newAllowance > ceiling) {
+                throw new Error(
+                    `New allowance would exceed controller ceiling!\n` +
+                        `Current:   ${currentAllowanceFormatted} ${symbol}\n` +
+                        `Increment: +${incrementFormatted} ${symbol}\n` +
+                        `New Total: ${newAllowanceFormatted} ${symbol}\n` +
+                        `Ceiling:   ${ethers.formatUnits(ceiling, decimals)} ${symbol}\n\n` +
+                        `The controller's allowance ceiling must be increased by the MasterMinter owner first.`,
+                );
+            }
 
             // Send transaction
             log();
@@ -2320,7 +2569,6 @@ camScope
             log();
         } catch (err) {
             error("Increment allowance transaction failed!", 0);
-            error(err.message, 0);
 
             if (err.stack) {
                 log();
