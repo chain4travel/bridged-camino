@@ -2,6 +2,7 @@
 pragma solidity ^0.8.22;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
+import { EnumerableMap } from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
 
 /**
  * @title Controller
@@ -11,6 +12,8 @@ import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
  *      This is a modernized version of USDC's Controller contract using custom errors.
  */
 contract Controller is Ownable {
+    using EnumerableMap for EnumerableMap.AddressToAddressMap;
+
     /***************************************************
      *                   STORAGE                       *
      ***************************************************/
@@ -19,7 +22,7 @@ contract Controller is Ownable {
      * @dev A controller manages a single worker address.
      * controllers[controller] = worker
      */
-    mapping(address controller => address worker) internal controllers;
+    EnumerableMap.AddressToAddressMap private controllers;
 
     /***************************************************
      *                    EVENTS                       *
@@ -72,7 +75,7 @@ contract Controller is Ownable {
      * @notice Ensures that caller is a controller with a non-zero worker address
      */
     modifier onlyController() {
-        if (controllers[msg.sender] == address(0)) {
+        if (!controllers.contains(msg.sender)) {
             revert NotController(msg.sender);
         }
         _;
@@ -94,7 +97,56 @@ contract Controller is Ownable {
      * @return The worker address (address(0) if controller not configured)
      */
     function getWorker(address controller) external view returns (address) {
-        return controllers[controller];
+        return _getWorker(controller);
+    }
+
+    /**
+     * @dev Internal function to get the worker address for a controller
+     * @param controller The controller address
+     * @return The worker address (address(0) if controller not configured)
+     */
+    function _getWorker(address controller) internal view returns (address) {
+        (, address worker) = controllers.tryGet(controller);
+        return worker;
+    }
+
+    /**
+     * @notice Gets the total number of configured controllers
+     * @return The count of controllers
+     */
+    function getControllerCount() external view returns (uint256) {
+        return controllers.length();
+    }
+
+    /**
+     * @notice Gets the controller and worker at a specific index
+     * @param index The index to query
+     * @return controller The controller address at the given index
+     * @return worker The worker address associated with the controller
+     */
+    function getControllerAt(uint256 index) external view returns (address controller, address worker) {
+        return controllers.at(index);
+    }
+
+    /**
+     * @notice Gets all controllers and their associated workers
+     * @return controllerAddresses Array of all controller addresses
+     * @return workerAddresses Array of all worker addresses
+     */
+    function getAllControllers()
+        external
+        view
+        returns (address[] memory controllerAddresses, address[] memory workerAddresses)
+    {
+        uint256 length = controllers.length();
+        controllerAddresses = new address[](length);
+        workerAddresses = new address[](length);
+
+        for (uint256 i = 0; i < length; i++) {
+            (controllerAddresses[i], workerAddresses[i]) = controllers.at(i);
+        }
+
+        return (controllerAddresses, workerAddresses);
     }
 
     /***************************************************
@@ -115,23 +167,23 @@ contract Controller is Ownable {
             revert WorkerZeroAddress();
         }
 
-        controllers[controller] = worker;
+        controllers.set(controller, worker);
         emit ControllerConfigured(controller, worker);
     }
 
     /**
-     * @notice Disables a controller by setting its worker to address(0)
+     * @notice Disables a controller by removing it from the enumerable map
      * @param controller The controller to disable
      */
     function removeController(address controller) public onlyOwner {
         if (controller == address(0)) {
             revert ControllerZeroAddress();
         }
-        if (controllers[controller] == address(0)) {
+        if (!controllers.contains(controller)) {
             revert ControllerNotFound(controller);
         }
 
-        controllers[controller] = address(0);
+        controllers.remove(controller);
         emit ControllerRemoved(controller);
     }
 }

@@ -201,7 +201,7 @@ contract MintController is Controller {
      */
     function configureControllerWithCeiling(address controller, address worker, uint256 ceiling) public onlyOwner {
         // Call parent to configure controller-worker mapping
-        super.configureController(controller, worker);
+        configureController(controller, worker);
 
         // Set the ceiling
         controllerCeilings[controller] = ceiling;
@@ -232,7 +232,7 @@ contract MintController is Controller {
      * @dev Can only be called by an active controller
      */
     function removeMinter() public onlyController {
-        address minter = controllers[msg.sender];
+        address minter = _getWorker(msg.sender);
         emit MinterRemoved(msg.sender, minter);
         minterManager.removeMinter(minter);
     }
@@ -244,7 +244,7 @@ contract MintController is Controller {
      */
     function configureMinter(uint256 newAllowance) public onlyController {
         _validateAllowanceCeiling(msg.sender, newAllowance);
-        address minter = controllers[msg.sender];
+        address minter = _getWorker(msg.sender);
         emit MinterConfigured(msg.sender, minter, newAllowance);
         _setMinterAllowance(minter, newAllowance);
     }
@@ -260,7 +260,7 @@ contract MintController is Controller {
             revert AllowanceIncrementZero();
         }
 
-        address minter = controllers[msg.sender];
+        address minter = _getWorker(msg.sender);
         if (!minterManager.isMinter(minter)) {
             revert MinterNotActive(minter);
         }
@@ -287,7 +287,7 @@ contract MintController is Controller {
             revert AllowanceDecrementZero();
         }
 
-        address minter = controllers[msg.sender];
+        address minter = _getWorker(msg.sender);
         if (!minterManager.isMinter(minter)) {
             revert MinterNotActive(minter);
         }

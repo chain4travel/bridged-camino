@@ -545,14 +545,14 @@ camScope
 camScope
     .task("status", "Display current state of deployed BridgedCaminoV1 token and MasterMinter")
     .addOptionalParam("deploymentId", "Deployment ID to check status for")
-    .addOptionalParam("fromBlock", "Starting block for event scanning (default: deployment block)")
-    .addOptionalParam("toBlock", "Ending block for event scanning (default: latest)")
+    .addOptionalParam("fromBlock", "Starting block for event scanning (only used with --scan-events)")
+    .addOptionalParam("toBlock", "Ending block for event scanning (only used with --scan-events)")
     .addOptionalParam(
         "blockChunkSize",
-        "Max blocks per query for event scanning (default: 5000, set to 0 to disable chunking)",
+        "Max blocks per query for event scanning (default: 5000, only used with --scan-events)",
         "5000",
     )
-    .addFlag("skipEvents", "Skip event scanning for controllers (faster, less complete)")
+    .addFlag("scanEvents", "Scan events from RPC instead of enumerating from contract (slower)")
     .setAction(async (taskArgs, hre) => {
         const { ethers, network } = hre;
 
@@ -729,13 +729,14 @@ camScope
             log();
             info(`Total Allowance: ${colors.bright} ${ethers.formatUnits(totalAllowance, decimals)} ${symbol}`, 1);
 
-            // Try to enumerate controllers via events
+            // Enumerate controllers
             subheader("Controllers Information");
 
-            if (taskArgs.skipEvents) {
-                warning("Event scanning skipped (--skip-events flag set)", 0);
-                info("Controllers cannot be enumerated without event scanning.", 0);
-            } else {
+            if (taskArgs.scanEvents) {
+                // Legacy mode: Scan events from RPC (slower, may hit rate limits)
+                info("Using event scanning mode (--scan-events flag set)", 0);
+                log();
+
                 // Determine deployment block from journal
                 let deploymentBlock = 0;
                 try {
@@ -893,26 +894,85 @@ camScope
                         }
                     }
                 } catch (e) {
-                    error(`Could not enumerate controllers: ${e.message}`, 0);
+                    error(`Could not enumerate controllers via events: ${e.message}`, 0);
 
                     if (e.message.includes("10000 blocks") || e.message.includes("block range")) {
                         log();
                         warning("Your RPC provider has block range limits. Try one of these solutions:", 0);
                         log("1. Use --from-block to start from a recent block:", 1, colors.cyan);
                         log(
-                            `yarn hardhat cam status --network ${network.name} --from-block ${toBlock - 10000}`,
+                            `yarn hardhat cam status --network ${network.name} --from-block ${(await provider.getBlockNumber()) - 10000}`,
                             2,
                             colors.cyan,
                         );
                         log("2. Use a smaller chunk size:", 1, colors.cyan);
                         log(
-                            `yarn hardhat cam status --network ${network.name} --block-chunk-size 2000`,
+                            `yarn hardhat cam status --network ${network.name} --scan-events --block-chunk-size 2000`,
                             2,
                             colors.cyan,
                         );
-                        log("3. Skip event scanning:", 1, colors.cyan);
-                        log(`yarn hardhat cam status --network ${network.name} --skip-events`, 2, colors.cyan);
+                        log("3. Use default enumeration (remove --scan-events flag):", 1, colors.cyan);
+                        log(`yarn hardhat cam status --network ${network.name}`, 2, colors.cyan);
                     }
+                }
+            } else {
+                // Default mode: Enumerate from contract (faster, more reliable)
+                try {
+                    const [controllerAddresses, workerAddresses] = await masterMinter.getAllControllers();
+
+                    if (controllerAddresses.length === 0) {
+                        warning("No active controllers found", 0);
+                        info("This is normal if no controllers have been configured yet.", 0);
+                    } else {
+                        log(`Active Controllers: ${controllerAddresses.length}`, 1, colors.bright);
+                        log();
+
+                        for (let i = 0; i < controllerAddresses.length; i++) {
+                            const controller = controllerAddresses[i];
+                            const worker = workerAddresses[i];
+
+                            const controllerType = await getAddressType(controller, provider);
+                            const workerType = await getAddressType(worker, provider);
+
+                            log(`[${i}] Controller: ${controller} (${controllerType})`, 1, colors.bright + colors.cyan);
+                            log(`Worker/Minter: ${worker} (${workerType})`, 3, colors.green);
+
+                            // Get controller's ceiling
+                            try {
+                                const ceiling = await masterMinter.getControllerCeiling(controller);
+                                if (ceiling === ethers.MaxUint256) {
+                                    log(`Ceiling:       Unlimited (MaxUint256)`, 3, colors.magenta);
+                                } else if (ceiling === 0n) {
+                                    log(`Ceiling:       0 ${symbol} (zero-only/disabler)`, 3, colors.yellow);
+                                } else {
+                                    log(
+                                        `Ceiling:       ${ethers.formatUnits(ceiling, decimals)} ${symbol}`,
+                                        3,
+                                        colors.magenta,
+                                    );
+                                }
+                            } catch (e) {
+                                warning(`Could not read controller ceiling: ${e.message}`, 3);
+                            }
+
+                            // Get worker's allowance if it's a minter
+                            try {
+                                const workerIsMinter = await token.isMinter(worker);
+                                if (workerIsMinter) {
+                                    const workerAllowance = await token.minterAllowance(worker);
+                                    log(`Allowance:     ${ethers.formatUnits(workerAllowance, decimals)} ${symbol}`, 3);
+                                } else {
+                                    warning(`Worker is not an active minter (configure minter not called?)`, 3);
+                                }
+                            } catch (e) {
+                                warning(`Could not read worker status: ${e.message}`, 3);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    error(`Could not enumerate controllers from contract: ${e.message}`, 0);
+                    info("Try using --scan-events flag to enumerate via event scanning instead.", 0);
+                    error(e.stack, 0);
                 }
             }
 
