@@ -764,6 +764,10 @@ function getAllControllers() external view returns (address[] controllerAddresse
 
 Gets all controllers and their associated workers
 
+_This function returns an array of all controllers and their associated
+workers. Thus it is possible to run out of gas if there are too many
+controllers. This assumes that there are not too many controllers._
+
 #### Return Values
 
 | Name                | Type      | Description                       |
@@ -779,7 +783,8 @@ function configureController(address controller, address worker) public
 
 Configure a controller with the given worker
 
-_The worker must be a non-zero address. To disable a controller, use removeController instead._
+_The worker must be a non-zero address. To disable a controller, use
+removeController instead._
 
 #### Parameters
 
@@ -795,6 +800,10 @@ function removeController(address controller) public
 ```
 
 Disables a controller by removing it from the enumerable map
+
+_WARNING: A worker can be managed by multiple controllers. Removing one
+controller does not affect the worker's status if it remains managed by at
+least one other controller._
 
 #### Parameters
 
@@ -1183,8 +1192,9 @@ function _validateAllowanceCeiling(address controller, uint256 newAllowance) int
 
 Validates that the requested allowance does not exceed the controller's ceiling
 
-_Ceiling of type(uint256).max means unlimited (no validation).
-Any other ceiling value is enforced._
+_Ceiling of type(uint256).max represents unlimited allowance (no validation).
+For any other ceiling value, the function enforces that newAllowance <= ceiling.
+Reverts with AllowanceExceedsCeiling if the limit is exceeded._
 
 #### Parameters
 

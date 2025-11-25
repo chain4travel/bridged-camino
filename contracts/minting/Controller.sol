@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-pragma solidity ^0.8.22;
+pragma solidity 0.8.28;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { EnumerableMap } from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
@@ -130,6 +130,9 @@ contract Controller is Ownable {
 
     /**
      * @notice Gets all controllers and their associated workers
+     * @dev This function returns an array of all controllers and their associated
+       workers. Thus it is possible to run out of gas if there are too many
+       controllers. This assumes that there are not too many controllers.
      * @return controllerAddresses Array of all controller addresses
      * @return workerAddresses Array of all worker addresses
      */
@@ -155,7 +158,8 @@ contract Controller is Ownable {
 
     /**
      * @notice Configure a controller with the given worker
-     * @dev The worker must be a non-zero address. To disable a controller, use removeController instead.
+     * @dev The worker must be a non-zero address. To disable a controller, use
+     * removeController instead.
      * @param controller The controller to be configured with a worker
      * @param worker The worker to be set for the controller
      */
@@ -173,6 +177,9 @@ contract Controller is Ownable {
 
     /**
      * @notice Disables a controller by removing it from the enumerable map
+     * @dev WARNING: A worker can be managed by multiple controllers. Removing one
+     * controller does not affect the worker's status if it remains managed by at
+     * least one other controller.
      * @param controller The controller to disable
      */
     function removeController(address controller) public onlyOwner {

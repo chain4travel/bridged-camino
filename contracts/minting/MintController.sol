@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-pragma solidity ^0.8.22;
+pragma solidity 0.8.28;
 
 import { Controller } from "./Controller.sol";
 import { IMinterManagement } from "../interfaces/IMinterManagement.sol";
@@ -308,8 +308,9 @@ contract MintController is Controller {
 
     /**
      * @notice Validates that the requested allowance does not exceed the controller's ceiling
-     * @dev Ceiling of type(uint256).max means unlimited (no validation).
-     *      Any other ceiling value is enforced.
+     * @dev Ceiling of type(uint256).max represents unlimited allowance (no validation).
+     * For any other ceiling value, the function enforces that newAllowance <= ceiling.
+     * Reverts with AllowanceExceedsCeiling if the limit is exceeded.
      * @param controller The controller address to check
      * @param newAllowance The allowance to validate
      */
