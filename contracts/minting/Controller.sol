@@ -130,6 +130,9 @@ contract Controller is Ownable {
 
     /**
      * @notice Gets all controllers and their associated workers
+     * @dev This function returns an array of all controllers and their associated
+       workers. Thus it is possible to run out of gas if there are too many
+       controllers. This assumes that there are not too many controllers.
      * @return controllerAddresses Array of all controller addresses
      * @return workerAddresses Array of all worker addresses
      */
