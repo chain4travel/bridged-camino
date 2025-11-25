@@ -173,6 +173,9 @@ contract Controller is Ownable {
 
     /**
      * @notice Disables a controller by removing it from the enumerable map
+     * @dev WARING: Because a worker can be controlled by multiple controllers, this
+       does not necessarily disable the worker this controller controls as that
+       worker may be controlled by another controller.
      * @param controller The controller to disable
      */
     function removeController(address controller) public onlyOwner {
