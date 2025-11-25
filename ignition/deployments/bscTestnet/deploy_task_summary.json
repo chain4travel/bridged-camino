@@ -1,0 +1,25 @@
+{
+  "network": "bscTestnet",
+  "chainId": 97,
+  "deploymentId": "bscTestnet",
+  "deployer": "0x7144188f0dC19280D3b5939A518F271AeF19D700",
+  "timestamp": "2025-11-25T14:02:54.068Z",
+  "deploymentTime": "22.28s",
+  "contracts": {
+    "proxy": "0x7CA996573346794d6B5e4aAA624203e325cdE989",
+    "implementation": "0x6BBc31f06379096f2bdCa536D39aDE154bf7Ec9B",
+    "masterMinter": "0xCaF0E1e242692C035B15395401B9db9bBfEAa942"
+  },
+  "parameters": {
+    "name": "Camino Token",
+    "symbol": "CAM",
+    "defaultAdmin": "0x7144188f0dC19280D3b5939A518F271AeF19D700",
+    "pauser": "0x7144188f0dC19280D3b5939A518F271AeF19D700",
+    "upgrader": "0x7144188f0dC19280D3b5939A518F271AeF19D700",
+    "blacklister": "0x7144188f0dC19280D3b5939A518F271AeF19D700",
+    "pauserRoleAdmin": "0x7144188f0dC19280D3b5939A518F271AeF19D700",
+    "upgraderRoleAdmin": "0x7144188f0dC19280D3b5939A518F271AeF19D700",
+    "blacklisterRoleAdmin": "0x7144188f0dC19280D3b5939A518F271AeF19D700",
+    "masterMinterOwner": "0x7144188f0dC19280D3b5939A518F271AeF19D700"
+  }
+}
