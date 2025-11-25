@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-pragma solidity 0.8.22;
+pragma solidity 0.8.28;
 
 import { Controller } from "./Controller.sol";
 import { IMinterManagement } from "../interfaces/IMinterManagement.sol";
