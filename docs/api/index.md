@@ -783,7 +783,8 @@ function configureController(address controller, address worker) public
 
 Configure a controller with the given worker
 
-_The worker must be a non-zero address. To disable a controller, use removeController instead._
+_The worker must be a non-zero address. To disable a controller, use
+removeController instead._
 
 #### Parameters
 
@@ -800,9 +801,9 @@ function removeController(address controller) public
 
 Disables a controller by removing it from the enumerable map
 
-_WARING: Because a worker can be controlled by multiple controllers, this
-does not necessarily disable the worker this controller controls as that
-worker may be controlled by another controller._
+_WARNING: A worker can be managed by multiple controllers. Removing one
+controller does not affect the worker's status if it remains managed by at
+least one other controller._
 
 #### Parameters
 

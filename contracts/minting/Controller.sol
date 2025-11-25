@@ -158,7 +158,8 @@ contract Controller is Ownable {
 
     /**
      * @notice Configure a controller with the given worker
-     * @dev The worker must be a non-zero address. To disable a controller, use removeController instead.
+     * @dev The worker must be a non-zero address. To disable a controller, use
+     * removeController instead.
      * @param controller The controller to be configured with a worker
      * @param worker The worker to be set for the controller
      */
@@ -176,9 +177,9 @@ contract Controller is Ownable {
 
     /**
      * @notice Disables a controller by removing it from the enumerable map
-     * @dev WARING: Because a worker can be controlled by multiple controllers, this
-       does not necessarily disable the worker this controller controls as that
-       worker may be controlled by another controller.
+     * @dev WARNING: A worker can be managed by multiple controllers. Removing one
+     * controller does not affect the worker's status if it remains managed by at
+     * least one other controller.
      * @param controller The controller to disable
      */
     function removeController(address controller) public onlyOwner {
