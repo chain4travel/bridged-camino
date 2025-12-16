@@ -25,6 +25,6 @@ To use this repository as a base for your Bridged Camino token, fork it.
 
 For comprehensive instructions on deployment, configuration, and detailed contract information, please refer to the following:
 
--   [**Deployment Guide**](./docs/DEPLOYMENT.md): Detailed steps for deploying the Bridged Camino token and MasterMinter system.
--   [**Developer Documentation**](./docs/README.md): Project overview, development guide, and information on running tests and generating documentation.
--   [**Contract API Reference**](./docs/api/index.md): Auto-generated documentation for the smart contracts.
+- [**Deployment Guide**](./docs/DEPLOYMENT.md): Detailed steps for deploying the Bridged Camino token and MasterMinter system.
+- [**Developer Documentation**](./docs/README.md): Project overview, development guide, and information on running tests and generating documentation.
+- [**Contract API Reference**](./docs/api/index.md): Auto-generated documentation for the smart contracts.
