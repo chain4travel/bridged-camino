@@ -10,6 +10,7 @@ const { Password } = require("enquirer");
 const colors = {
     reset: "\x1b[0m",
     bright: "\x1b[1m",
+    dark: "\x1b[2m",
     red: "\x1b[31m",
     green: "\x1b[32m",
     yellow: "\x1b[33m",
@@ -918,7 +919,17 @@ camScope
             } else {
                 // Default mode: Enumerate from contract (faster, more reliable)
                 try {
-                    const [controllerAddresses, workerAddresses] = await masterMinter.getAllControllers();
+                    const controllerCount = await masterMinter.getControllerCount();
+                    log(`Controller count on contract: ${controllerCount}`, 1, colors.dark);
+
+                    const controllerAddresses = [];
+                    const workerAddresses = [];
+
+                    for (let i = 0; i < controllerCount; i++) {
+                        const [controller, worker] = await masterMinter.getControllerAt(i);
+                        controllerAddresses.push(controller);
+                        workerAddresses.push(worker);
+                    }
 
                     if (controllerAddresses.length === 0) {
                         warning("No active controllers found", 0);
