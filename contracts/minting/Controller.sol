@@ -67,6 +67,13 @@ contract Controller is Ownable {
      */
     error ControllerNotFound(address controller);
 
+    /**
+     * @notice Thrown when attempting to access a controller at an invalid index
+     * @param index The invalid index being accessed
+     * @param count The current number of controllers
+     */
+    error IndexOutOfBounds(uint256 index, uint256 count);
+
     /***************************************************
      *                  MODIFIERS                      *
      ***************************************************/
@@ -125,6 +132,9 @@ contract Controller is Ownable {
      * @return worker The worker address associated with the controller
      */
     function getControllerAt(uint256 index) external view returns (address controller, address worker) {
+        if (index >= controllers.length()) {
+            revert IndexOutOfBounds(index, controllers.length());
+        }
         return controllers.at(index);
     }
 
