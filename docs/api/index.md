@@ -667,6 +667,21 @@ Thrown when attempting to remove a controller that doesn't exist
 | ---------- | ------- | ----------------------------------------- |
 | controller | address | The controller address that doesn't exist |
 
+### IndexOutOfBounds
+
+```solidity
+error IndexOutOfBounds(uint256 index, uint256 count)
+```
+
+Thrown when attempting to access a controller at an invalid index
+
+#### Parameters
+
+| Name  | Type    | Description                       |
+| ----- | ------- | --------------------------------- |
+| index | uint256 | The invalid index being accessed  |
+| count | uint256 | The current number of controllers |
+
 ### onlyController
 
 ```solidity
