@@ -66,133 +66,217 @@ yarn test
 <summary>Example output:</summary>
 
 ```
-yarn run v1.22.22
-$ REPORT_GAS=true yarn hardhat test
-$ /home/ekrem/tmp/bridged-camino/node_modules/.bin/hardhat test
-Compiled 42 Solidity files successfully (evm target: paris).
+yarn run v1.22.19
+$ yarn hardhat test
+$ /hgst/work/github.com/chain4travel/bridged-camino/node_modules/.bin/hardhat test
  ·----------------------------|--------------------------------|--------------------------------·
  |  Solc version: 0.8.28      ·  Optimizer enabled: true       ·  Runs: 10000                   │
  ·····························|································|·································
  |  Contract Name             ·  Deployed size (KiB) (change)  ·  Initcode size (KiB) (change)  │
  ·····························|································|·································
- |  Address                   ·                      0.084 ()  ·                      0.138 ()  │
+ |  Comparators               ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  Panic                     ·                      0.084 ()  ·                      0.138 ()  │
+ |  Arrays                    ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  StorageSlot               ·                      0.084 ()  ·                      0.138 ()  │
+ |  StorageSlot               ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  Errors                    ·                      0.084 ()  ·                      0.138 ()  │
+ |  Address                   ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  Strings                   ·                      0.084 ()  ·                      0.138 ()  │
+ |  SlotDerivation            ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  ERC1967Utils              ·                      0.084 ()  ·                      0.138 ()  │
+ |  Errors                    ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  MessageHashUtils          ·                      0.084 ()  ·                      0.138 ()  │
+ |  Panic                     ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  SignedMath                ·                      0.084 ()  ·                      0.138 ()  │
+ |  Strings                   ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  SafeCast                  ·                      0.084 ()  ·                      0.138 ()  │
+ |  ERC1967Utils              ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  ECDSA                     ·                      0.084 ()  ·                      0.138 ()  │
+ |  SafeCast                  ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  EnumerableSet             ·                      0.084 ()  ·                      0.138 ()  │
+ |  SignedMath                ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  Math                      ·                      0.084 ()  ·                      0.138 ()  │
+ |  EnumerableMap             ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  ERC1967Proxy              ·                      0.179 ()  ·                      1.028 ()  │
+ |  ECDSA                     ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  BridgedCaminoV1           ·                     15.231 ()  ·                     15.479 ()  │
+ |  Math                      ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
  ·····························|································|·································
- |  BridgedCaminoUpgradeTest  ·                     15.311 ()  ·                     15.558 ()  │
+ |  EnumerableSet             ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
+ ·····························|································|·································
+ |  MessageHashUtils          ·                 0.084 (0.000)  ·                 0.138 (0.000)  │
+ ·····························|································|·································
+ |  ERC1967Proxy              ·                 0.179 (0.000)  ·                 1.028 (0.000)  │
+ ·····························|································|·································
+ |  Controller                ·                 2.491 (0.000)  ·                 2.738 (0.000)  │
+ ·····························|································|·································
+ |  MintController            ·                 5.477 (0.000)  ·                 5.799 (0.000)  │
+ ·····························|································|·································
+ |  MasterMinter              ·                 5.477 (0.000)  ·                 5.803 (0.000)  │
+ ·····························|································|·································
+ |  BridgedCaminoV1           ·                15.778 (0.000)  ·                16.025 (0.000)  │
+ ·····························|································|·································
+ |  BridgedCaminoUpgradeTest  ·                15.857 (0.000)  ·                16.104 (0.000)  │
  ·----------------------------|--------------------------------|--------------------------------·
 
-BridgedCaminoV1
-Deployment
-✔ Should set the right name and symbol
-✔ Should set the right decimals
-✔ Should set the right total supply
-✔ Should set the right roles
-✔ Should revert calling initialize twice
-✔ Check eip712Domain
-Upgrade
-✔ Should upgrade
-✔ Should revert calling upgradeToAndCall from non-upgrader
-Mint
-✔ Should mint tokens
-✔ Should revert if not minter
-✔ Should revert configure minter if not minter admin
-✔ Should revert if amount exceeds minter allowance
-✔ Should revert when paused
-✔ Should remove minter correctly
-✔ Should revert if remove minter if not minter admin
-Burn
-✔ Should burn correctly
-✔ Should revert if burn more than balance
-✔ Should revert burn if not minter
-✔ Should revert burn when paused
-✔ Should burnFrom correctly
-✔ Should revert burnFrom if not minter
-✔ Should revert burnFrom when paused
-Pause
-✔ Should pause and unpause the contract
-✔ Should revert pause/unpause if not pauser
-Blacklist
-✔ Should blacklist and unblacklist an account
-✔ Should revert mint with blacklisted to and msg.sender
-✔ Should revert burn with blacklisted msg.sender
-✔ Should revert burnFrom with blacklisted from and msg.sender
-✔ Should revert blacklist/unblacklist with non-blacklister
-✔ Should get blacklisted accounts correctly
-✔ Should revert transfer with blacklisted from/to
-✔ Should revert transferFrom with blacklisted from/to/spender
 
-·----------------------------------------|---------------------------|---------------|-----------------------------·
-| Solc version: 0.8.28 · Optimizer enabled: true · Runs: 10000 · Block limit: 30000000 gas │
-·········································|···························|···············|······························
-| Methods │
-····················|····················|·············|·············|···············|···············|··············
-| Contract · Method · Min · Max · Avg · # calls · usd (avg) │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · approve · 39215 · 56015 · 52631 · 10 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · blacklist · 52489 · 52501 · 52494 · 22 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · burn · - · - · 49953 · 5 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · burnFrom · 47008 · 58687 · 51680 · 5 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · configureMinter · - · - · 146874 · 4 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · grantRole · 123266 · 123278 · 123273 · 10 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · mint · 57610 · 91882 · 88335 · 34 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · pause · - · - · 51931 · 8 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · removeMinter · - · - · 46884 · 3 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · transfer · 46257 · 63381 · 51969 · 6 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · transferFrom · 49079 · 70135 · 59607 · 4 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · unBlacklist · 30581 · 30593 · 30584 · 16 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · unpause · - · - · 29966 · 2 · - │
-····················|····················|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · upgradeToAndCall · - · - · 37733 · 2 · - │
-····················|····················|·············|·············|···············|···············|··············
-| Deployments · · % of limit · │
-·········································|·············|·············|···············|···············|··············
-| BridgedCaminoUpgradeTest · - · - · 3447039 · 11.5 % · - │
-·········································|·············|·············|···············|···············|··············
-| BridgedCaminoV1 · - · - · 3429872 · 11.4 % · - │
-·········································|·············|·············|···············|···············|··············
-| ERC1967Proxy · - · - · 633206 · 2.1 % · - │
-·----------------------------------------|-------------|-------------|---------------|---------------|-------------·
+  BridgedCaminoV1
+    Deployment
+      ✔ Should set the right name and symbol (706ms)
+      ✔ Should set the right decimals
+      ✔ Should set the right total supply
+      ✔ Should set the right roles
+      ✔ Should revert calling initialize twice
+      ✔ Check eip712Domain
+    Upgrade
+      ✔ Should upgrade
+      ✔ Should revert calling upgradeToAndCall from non-upgrader
+    Mint
+      ✔ Should mint tokens
+      ✔ Should revert if not minter
+      ✔ Should revert configure minter if not minter admin
+      ✔ Should revert if amount exceeds minter allowance
+      ✔ Should revert when paused
+      ✔ Should remove minter correctly
+      ✔ Should revert if remove minter if not minter admin
+    Burn
+      ✔ Should burn correctly
+      ✔ Should revert if burn more than balance
+      ✔ Should revert burn if not minter
+      ✔ Should allow burn when paused for emergency response
+      ✔ Should burnFrom correctly (38ms)
+      ✔ Should revert burnFrom if not minter
+      ✔ Should allow burnFrom when paused for emergency response
+    Pause
+      ✔ Should pause and unpause the contract
+      ✔ Should revert pause/unpause if not pauser
+    Blacklist
+      ✔ Should blacklist and unblacklist an account
+      ✔ Should revert mint with blacklisted to and msg.sender
+      ✔ Should revert burn with blacklisted msg.sender
+      ✔ Should revert burnFrom with blacklisted from and msg.sender
+      ✔ Should revert blacklist/unblacklist with non-blacklister
+      ✔ Should get blacklisted accounts correctly
+      ✔ Should revert transfer with blacklisted from/to (44ms)
+      ✔ Should revert transferFrom with blacklisted from/to/spender (56ms)
 
-32 passing (2s)
+  Controller
+    Deployment
+      ✔ Should set the correct owner
+    configureController
+      ✔ Should allow owner to configure a controller
+      ✔ Should allow reconfiguring an existing controller with a different worker
+      ✔ Should allow multiple controllers to manage the same worker
+      ✔ Should revert if controller address is zero
+      ✔ Should revert if worker address is zero
+      ✔ Should revert if called by non-owner
+    removeController
+      ✔ Should allow owner to remove a controller
+      ✔ Should revert if controller address is zero
+      ✔ Should revert if controller doesn't exist
+      ✔ Should revert if called by non-owner
+    getWorker
+      ✔ Should return the correct worker for a controller
+      ✔ Should return zero address for unconfigured controller
+    getControllerAt
+      ✔ Should return the correct controller and worker at a specific index
+      ✔ Should revert with IndexOutOfBounds when index is too high
+      ✔ Should revert with IndexOutOfBounds when list is empty
+    onlyController modifier
+      ✔ Should allow configured controllers to access protected functions
 
-Done in 4.79s.
+  MasterMinter
+    Deployment
+      ✔ Should set the correct owner (59ms)
+      ✔ Should set the correct minter manager
+      ✔ Should inherit from MintController
+    Controller functionality
+      ✔ Should allow owner to configure controllers
+      ✔ Should allow owner to remove controllers
+    MintController functionality
+      ✔ Should allow controllers to configure minters
+      ✔ Should allow controllers to increment minter allowances
+      ✔ Should allow controllers to decrement minter allowances
+      ✔ Should allow controllers to remove minters
+    Multi-controller scenario
+      ✔ Should support multiple controllers managing different minters
+      ✔ Should allow owner to update minter manager for all controllers
+    End-to-end workflow
+      ✔ Should support complete lifecycle: configure -> mint -> adjust -> remove
+
+  MintController
+    Deployment
+      ✔ Should set the correct owner (61ms)
+      ✔ Should set the correct minter manager
+      ✔ Should allow deployment with zero address for atomic deployment pattern
+      ✔ Should require setMinterManager before use when deployed with zero address
+    setMinterManager
+      ✔ Should allow owner to update minter manager
+      ✔ Should revert if new minter manager is zero address
+      ✔ Should revert if called by non-owner
+    configureMinter
+      ✔ Should allow controller to configure their minter with allowance
+      ✔ Should allow controller to update their minter's allowance
+      ✔ Should revert if caller is not a controller
+    incrementMinterAllowance
+      ✔ Should allow controller to increment their minter's allowance
+      ✔ Should revert if increment is zero
+      ✔ Should revert if minter is not active
+      ✔ Should revert if caller is not a controller
+      ✔ Should revert on overflow
+    decrementMinterAllowance
+      ✔ Should allow controller to decrement their minter's allowance
+      ✔ Should cap decrement at current allowance (safe decrement)
+      ✔ Should revert if decrement is zero
+      ✔ Should revert if minter is not active
+      ✔ Should revert if caller is not a controller
+    removeMinter
+      ✔ Should allow controller to remove their minter
+      ✔ Should revert if caller is not a controller
+    Multiple controllers managing same minter
+      ✔ Should allow multiple controllers to manage the same minter independently
+    Integration with BridgedCaminoV1
+      ✔ Should enable minter to mint after being configured
+      ✔ Should prevent minting after minter is removed
+    Controller Ceilings
+      configureController with default ceiling
+        ✔ Should set ceiling to 0 when configuring new controller
+        ✔ Should update ceiling when reconfiguring existing controller
+      setControllerCeiling
+        ✔ Should allow owner to set controller ceiling
+        ✔ Should allow owner to update existing ceiling
+        ✔ Should allow owner to set ceiling to 0 (zero-only, for disabler controllers)
+        ✔ Should allow owner to set ceiling to MaxUint256 (unlimited)
+        ✔ Should revert if called by non-owner
+      getControllerCeiling
+        ✔ Should return 0 for newly configured controller (default ceiling)
+        ✔ Should return correct ceiling after it is set
+      configureMinter with ceiling
+        ✔ Should allow configureMinter when allowance is below ceiling
+        ✔ Should allow configureMinter when allowance equals ceiling
+        ✔ Should revert when allowance exceeds ceiling
+        ✔ Should allow unlimited allowance when ceiling is set to MaxUint256
+        ✔ Should enforce default ceiling of 0 (controller can only disable)
+      incrementMinterAllowance with ceiling
+        ✔ Should allow increment when new allowance is below ceiling
+        ✔ Should allow increment when new allowance equals ceiling
+        ✔ Should revert when increment would exceed ceiling
+        ✔ Should allow unlimited increment when ceiling is MaxUint256
+        ✔ Should prevent increment when ceiling is 0 (default zero-only controller)
+      decrementMinterAllowance with ceiling
+        ✔ Should allow decrement regardless of ceiling (reducing is always allowed)
+        ✔ Should allow zero-ceiling controller to decrement (useful for disabling)
+      Multiple controllers with different ceilings
+        ✔ Should enforce different ceilings for different controllers
+        ✔ Should allow one controller with limited ceiling and another with unlimited
+      Ceiling edge cases
+        ✔ Should handle ceiling of 1 (minimum non-zero ceiling)
+        ✔ Should handle MaxUint256 ceiling (effectively unlimited)
+
+
+  111 passing (2s)
+
+Done in 3.84s.
 
 ```
 
@@ -262,7 +346,7 @@ yarn hardhat ignition deploy ignition/modules/BridgedCaminoV1.js --parameters ig
 Deployment artifacts will be saved to `ignition/deployments/chain-<chainID>`.
 
 > [!IMPORTANT]
->
+> 
 > **It is recommended to also push these artifacts to your repository.**
 
 <details>
