@@ -128,30 +128,6 @@ contract Controller is Ownable {
         return controllers.at(index);
     }
 
-    /**
-     * @notice Gets all controllers and their associated workers
-     * @dev This function returns an array of all controllers and their associated
-       workers. Thus it is possible to run out of gas if there are too many
-       controllers. This assumes that there are not too many controllers.
-     * @return controllerAddresses Array of all controller addresses
-     * @return workerAddresses Array of all worker addresses
-     */
-    function getAllControllers()
-        external
-        view
-        returns (address[] memory controllerAddresses, address[] memory workerAddresses)
-    {
-        uint256 length = controllers.length();
-        controllerAddresses = new address[](length);
-        workerAddresses = new address[](length);
-
-        for (uint256 i = 0; i < length; i++) {
-            (controllerAddresses[i], workerAddresses[i]) = controllers.at(i);
-        }
-
-        return (controllerAddresses, workerAddresses);
-    }
-
     /***************************************************
      *           ONLY OWNER FUNCTIONS                  *
      ***************************************************/
