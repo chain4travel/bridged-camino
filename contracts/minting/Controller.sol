@@ -67,6 +67,13 @@ contract Controller is Ownable {
      */
     error ControllerNotFound(address controller);
 
+    /**
+     * @notice Thrown when attempting to access a controller at an invalid index
+     * @param index The invalid index being accessed
+     * @param count The current number of controllers
+     */
+    error IndexOutOfBounds(uint256 index, uint256 count);
+
     /***************************************************
      *                  MODIFIERS                      *
      ***************************************************/
@@ -125,31 +132,10 @@ contract Controller is Ownable {
      * @return worker The worker address associated with the controller
      */
     function getControllerAt(uint256 index) external view returns (address controller, address worker) {
-        return controllers.at(index);
-    }
-
-    /**
-     * @notice Gets all controllers and their associated workers
-     * @dev This function returns an array of all controllers and their associated
-       workers. Thus it is possible to run out of gas if there are too many
-       controllers. This assumes that there are not too many controllers.
-     * @return controllerAddresses Array of all controller addresses
-     * @return workerAddresses Array of all worker addresses
-     */
-    function getAllControllers()
-        external
-        view
-        returns (address[] memory controllerAddresses, address[] memory workerAddresses)
-    {
-        uint256 length = controllers.length();
-        controllerAddresses = new address[](length);
-        workerAddresses = new address[](length);
-
-        for (uint256 i = 0; i < length; i++) {
-            (controllerAddresses[i], workerAddresses[i]) = controllers.at(i);
+        if (index >= controllers.length()) {
+            revert IndexOutOfBounds(index, controllers.length());
         }
-
-        return (controllerAddresses, workerAddresses);
+        return controllers.at(index);
     }
 
     /***************************************************

@@ -160,6 +160,33 @@ describe("Controller", function () {
         });
     });
 
+    describe("getControllerAt", function () {
+        it("Should return the correct controller and worker at a specific index", async function () {
+            const { controller, controller1, worker1 } = await loadFixture(controllerWithConfiguredControllersFixture);
+
+            const [ctrl, wrk] = await controller.getControllerAt(0);
+            expect(ctrl).to.equal(controller1.address);
+            expect(wrk).to.equal(worker1.address);
+        });
+
+        it("Should revert with IndexOutOfBounds when index is too high", async function () {
+            const { controller } = await loadFixture(controllerWithConfiguredControllersFixture);
+            const count = await controller.getControllerCount();
+
+            await expect(controller.getControllerAt(count + 42n))
+                .to.be.revertedWithCustomError(controller, "IndexOutOfBounds")
+                .withArgs(count + 42n, count);
+        });
+
+        it("Should revert with IndexOutOfBounds when list is empty", async function () {
+            const { controller } = await loadFixture(deployControllerFixture);
+
+            await expect(controller.getControllerAt(0))
+                .to.be.revertedWithCustomError(controller, "IndexOutOfBounds")
+                .withArgs(0, 0);
+        });
+    });
+
     describe("onlyController modifier", function () {
         // Note: We can't directly test the modifier without a function that uses it.
         // This will be tested more thoroughly in MintController tests.

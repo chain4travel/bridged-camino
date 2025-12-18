@@ -667,6 +667,21 @@ Thrown when attempting to remove a controller that doesn't exist
 | ---------- | ------- | ----------------------------------------- |
 | controller | address | The controller address that doesn't exist |
 
+### IndexOutOfBounds
+
+```solidity
+error IndexOutOfBounds(uint256 index, uint256 count)
+```
+
+Thrown when attempting to access a controller at an invalid index
+
+#### Parameters
+
+| Name  | Type    | Description                       |
+| ----- | ------- | --------------------------------- |
+| index | uint256 | The invalid index being accessed  |
+| count | uint256 | The current number of controllers |
+
 ### onlyController
 
 ```solidity
@@ -755,25 +770,6 @@ Gets the controller and worker at a specific index
 | ---------- | ------- | ------------------------------------------------- |
 | controller | address | The controller address at the given index         |
 | worker     | address | The worker address associated with the controller |
-
-### getAllControllers
-
-```solidity
-function getAllControllers() external view returns (address[] controllerAddresses, address[] workerAddresses)
-```
-
-Gets all controllers and their associated workers
-
-_This function returns an array of all controllers and their associated
-workers. Thus it is possible to run out of gas if there are too many
-controllers. This assumes that there are not too many controllers._
-
-#### Return Values
-
-| Name                | Type      | Description                       |
-| ------------------- | --------- | --------------------------------- |
-| controllerAddresses | address[] | Array of all controller addresses |
-| workerAddresses     | address[] | Array of all worker addresses     |
 
 ### configureController
 
